@@ -121,7 +121,7 @@ bt-dynamic/
 - [x] 差し替え UX: `--param key=value` / `--indicators file.py` / `--json`
 残りは以下の**固定順**で進める（スキルの依存関係由来。順番をセッションごとに再判断しない）:
 
-1. [ ] （任意・小）dotfiles 版の残機能移植: `--cells` フィルタ / debug_day 相当の判定ポイント出力
+1. [x] dotfiles 版の残機能移植: `--cells` / `--debug`（判定ポイント出力）/ 複数 `--data` / 旧キー改名ヒント
 2. [ ] **repo-standardize** — 公開前点検・足場（CI・.claude/・issues/・コアメッセージ1文の確定まで）。readme-guide §1・§3 はここの管轄
 3. [ ] **repo-readme** — README 本格化（アウトライン以降・Design Decisions への JUDGE.md 統合・docs/ 分離）
 4. [ ] **readme-i18n** — 英語版 README.en.md
