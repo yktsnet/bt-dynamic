@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bt-dynamic"
-version = "0.1.2"
+version = "0.1.3"
 description = "Backtest engine for dynamic regime switching: classify the market into a 9-cell grid and switch between trend-following and mean-reversion per regime"
 readme = { text = "Full documentation, architecture, and usage examples: https://github.com/yktsnet/bt-dynamic", content-type = "text/plain" }
 license = "MIT"
