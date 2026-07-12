@@ -1,3 +1,5 @@
+[🇯🇵 日本語](README.md) | [🇬🇧 English](README.en.md)
+
 # bt-dynamic
 
 [![CI](https://github.com/yktsnet/bt-dynamic/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/bt-dynamic/actions/workflows/ci.yml)
