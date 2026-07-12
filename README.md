@@ -60,7 +60,7 @@ flowchart LR
 | データ取得 | dukascopy-node（外部 CLI・依存に含めない） | API key 不要・無料で 1h 足を取得できる主経路。取得コードは配るがデータそのものは同梱・再配布しない |
 | テスト | pytest | `src/` を1対1でミラーする単体テスト構成 |
 
-## 差し替えながら回す
+## Running with Overrides
 
 このツールの本体は「インジケーターとパラメータを差し替えて、結果を見て、また回す」ループ。
 
@@ -113,7 +113,7 @@ bt-dynamic --config c.json --data bars.jsonl --param tp_pips=30 --json >> runs.j
 jq '{tp: .meta.param_overrides.tp_pips, total: .summary.total_pips}' runs.jsonl
 ```
 
-## 戦略を増やすには
+## Adding Strategies
 
 1戦略 = 1ディレクトリ。`examples/trend/` をコピーして中身を差し替えるのが増やし方の標準形。
 
@@ -143,7 +143,7 @@ trades = run_day(df, "2025-01-07", config)
 summarize(trades)
 ```
 
-## 9セルの枠組み
+## The 9-Cell Framework
 
 3 指標を 3 段階（0/1/2）に分類し、2 軸の組み合わせで 9 セルを構成する。3 軸目（方向指標）が BUY / SELL / None を返し、各セルに割り当てたモードがエントリーを決める。
 
@@ -186,9 +186,9 @@ summarize(trades)
 | 出す（手法） | 9セル分類・follow/flip・比較で仮説を潰す作法（`--json` 出力の比較）・研究/本番の分離・設定ファイル(JSON)設計 |
 | 出さない（答え） | `regime_strategy` の本番値・閾値の実数・TP/SL・成績・通貨ペア |
 
-戦略は `examples/trend/` の1本に絞る（複数戦略の比較機能・対話的な戦略追加ウィザードは対象外。[戦略を増やすには](#戦略を増やすには)のファイルコピー運用に統一する）。
+戦略は `examples/trend/` の1本に絞る（複数戦略の比較機能・対話的な戦略追加ウィザードは対象外。[Adding Strategies](#adding-strategies)のファイルコピー運用に統一する）。
 
-## 開発
+## Development
 
 ```bash
 pip install -e . --group dev
