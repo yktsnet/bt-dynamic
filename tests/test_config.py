@@ -56,3 +56,26 @@ def test_bad_strategy_key_rejected():
 def test_bad_entry_mode_rejected():
     with pytest.raises(ValueError, match="entry mode"):
         Config.from_dict({"regime_strategy": {"0,0": "reverse"}})
+
+
+def test_parse_param_overrides():
+    from bt_dynamic.config import parse_param_overrides
+
+    overrides = parse_param_overrides(["tp_pips=15", "bars_per_window=4"])
+    assert overrides == {"tp_pips": 15.0, "bars_per_window": 4}
+    assert isinstance(overrides["tp_pips"], float)
+    assert isinstance(overrides["bars_per_window"], int)
+
+    with pytest.raises(ValueError, match="key=value"):
+        parse_param_overrides(["tp_pips"])
+    with pytest.raises(ValueError, match="unknown parameter"):
+        parse_param_overrides(["tp_pip=15"])
+
+
+def test_config_override():
+    config = Config.from_dict({"parameters": {"tp_pips": 30.0}})
+    overridden = config.override(tp_pips=15.0, sl_pips=5.0)
+
+    assert overridden.params.tp_pips == 15.0
+    assert overridden.params.sl_pips == 5.0
+    assert config.params.tp_pips == 30.0  # original untouched

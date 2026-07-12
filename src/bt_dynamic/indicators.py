@@ -7,7 +7,9 @@ own indicators by passing a different :class:`IndicatorSet` to ``run_day``.
 
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -64,3 +66,21 @@ DEFAULT_INDICATORS = IndicatorSet(
     compute_ax2=compute_atr,
     compute_direction=compute_rsi,
 )
+
+
+def load_indicator_file(path: str | Path) -> IndicatorSet:
+    """Load a user Python file that defines ``INDICATORS = IndicatorSet(...)``.
+
+    This is how a strategy directory swaps in its own indicators from the CLI
+    (``--indicators my_strategy/indicators.py``) without touching the package.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"indicator file not found: {path}")
+    spec = importlib.util.spec_from_file_location("bt_dynamic._user_indicators", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    indicators = getattr(module, "INDICATORS", None)
+    if not isinstance(indicators, IndicatorSet):
+        raise ValueError(f"{path}: must define INDICATORS = IndicatorSet(...)")
+    return indicators

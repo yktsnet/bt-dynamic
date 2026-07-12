@@ -16,15 +16,82 @@ pip install bt-dynamic
 
 ## 使い方
 
+標準の使い方は実データを自分で取得して回すこと（リポにデータは同梱しない。取得手順は [docs/fetch-data.md](docs/fetch-data.md)）。
+
+```bash
+# 1h 足を取得（API key 不要）して変換
+npx dukascopy-node -i eurusd -from 2025-01-01 -to 2025-03-31 -t h1 -f json
+bt-dynamic-convert download/eurusd-h1-*.json -o bars.jsonl
+
+# バックテスト
+bt-dynamic --config my-config.json --data bars.jsonl
+```
+
+まず動きを見るだけなら同梱の合成サンプルで:
+
 ```bash
 bt-dynamic --config examples/trend/config.json --data examples/trend/data/sample_m5.jsonl
 ```
 
 - `--config`: パラメータとセル対応表（`regime_strategy`）を持つ JSON。`$BT_DYNAMIC_CONFIG` でも指定可
-- `--data`: JSONL のバーデータ（`time_utc` / `open` / `high` / `low` / `close`）。リポにデータは同梱しない。利用者が Dukascopy 等から自取得する
+- `--data`: JSONL のバーデータ（`time_utc` / `open` / `high` / `low` / `close`）
 - `--dynamic`: 閾値を固定値でなく直近営業日のパーセンタイルから動的に導出する
 
-Python API:
+## 差し替えながら回す
+
+このツールの本体は「インジケーターとパラメータを差し替えて、結果を見て、また回す」ループ。
+
+**パラメータ**は JSON を編集せず引数で上書きできる:
+
+```bash
+bt-dynamic --config c.json --data bars.jsonl --param tp_pips=15 --param ax1_weak=20
+```
+
+**インジケーター**は `IndicatorSet` を公開する Python ファイルを渡して差し替える:
+
+```bash
+bt-dynamic --config c.json --data bars.jsonl --indicators my_strategy/indicators.py
+```
+
+```python
+# my_strategy/indicators.py
+from bt_dynamic import IndicatorSet
+
+INDICATORS = IndicatorSet(
+    compute_ax1=my_trend_strength,   # 軸1: トレンド強度
+    compute_ax2=my_volatility,       # 軸2: ボラティリティ
+    compute_direction=my_oscillator, # 方向バイアス（中心値付き振動子）
+)
+```
+
+**結果の比較**は `--json` で機械可読サマリーを吐き、好きに並べる:
+
+```bash
+bt-dynamic --config c.json --data bars.jsonl --param tp_pips=15 --json >> runs.jsonl
+bt-dynamic --config c.json --data bars.jsonl --param tp_pips=30 --json >> runs.jsonl
+jq '{tp: .meta.param_overrides.tp_pips, total: .summary.total_pips}' runs.jsonl
+```
+
+## 戦略を増やすには
+
+1戦略 = 1ディレクトリ。`examples/trend/` をコピーして中身を差し替えるのが増やし方の標準形。
+
+```
+my_strategies/
+  breakout/
+    config.json     # このセル対応表・閾値
+    indicators.py   # INDICATORS = IndicatorSet(...)（デフォルト指標のままなら不要）
+  meanrev/
+    config.json
+```
+
+```bash
+bt-dynamic --config my_strategies/breakout/config.json --indicators my_strategies/breakout/indicators.py --data bars.jsonl
+```
+
+エンジン（この package）は触らない。戦略の中身はあなたのファイルにだけ存在する。
+
+## Python API
 
 ```python
 from bt_dynamic import Config, load_jsonl, run_day, summarize
@@ -33,19 +100,6 @@ config = Config.load("your-config.json")
 df = load_jsonl("your-bars.jsonl")
 trades = run_day(df, "2025-01-07", config)
 summarize(trades)
-```
-
-指標は差し替え可能（デフォルトは ADX / ATR / RSI）:
-
-```python
-from bt_dynamic import IndicatorSet, run_day
-
-my_indicators = IndicatorSet(
-    compute_ax1=my_trend_strength,   # 軸1: トレンド強度
-    compute_ax2=my_volatility,       # 軸2: ボラティリティ
-    compute_direction=my_oscillator, # 方向バイアス（中心値付き振動子）
-)
-trades = run_day(df, "2025-01-07", config, indicators=my_indicators)
 ```
 
 ## 9セルの枠組み

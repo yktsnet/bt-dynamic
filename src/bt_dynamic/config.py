@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 ENV_CONFIG_PATH = "BT_DYNAMIC_CONFIG"
@@ -76,6 +76,27 @@ class Config:
 
         strategy = _parse_strategy(data.get("regime_strategy", {}), source)
         return cls(params=params, regime_strategy=strategy)
+
+    def override(self, **overrides) -> "Config":
+        """Return a copy with some parameters replaced (e.g. from CLI ``--param``)."""
+        return replace(self, params=replace(self.params, **overrides))
+
+
+def parse_param_overrides(pairs: list[str]) -> dict:
+    """Parse ``["tp_pips=15", "ax1_weak=20"]`` into typed parameter overrides."""
+    defaults = Params()
+    known = {f.name for f in fields(Params)}
+    overrides = {}
+    for pair in pairs:
+        key, sep, value = pair.partition("=")
+        if not sep:
+            raise ValueError(f"--param expects key=value, got {pair!r}")
+        if key not in known:
+            raise ValueError(
+                f"unknown parameter {key!r} (known: {', '.join(sorted(known))})"
+            )
+        overrides[key] = type(getattr(defaults, key))(value)
+    return overrides
 
 
 def _parse_strategy(raw: dict, source: str) -> dict[Cell, str | None]:

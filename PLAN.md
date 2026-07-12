@@ -113,22 +113,15 @@ bt-dynamic/
 
 ## TODO
 
-- [ ] Dotfiles（先行リファクタリング済み）から `src/bt_dynamic/` へのコア移植
-  - [ ] engine.py / regime.py / config.py / indicators.py / data.py の配置（依存逆転の解消込み）
-  - [ ] pyproject.toml（hatchling・console script `bt-dynamic`）
-  - [ ] argparse による CLI（cli.py）
-- [ ] 適用例 `examples/trend/` の構築
-  - [ ] 説明用ダミー設定 config.json（教科書的対応表・本番と別物）
-  - [ ] 合成データ data/sample_m5.jsonl + generate_data.py（実データは同梱しない）
-  - [ ] examples/trend/README.md
-- [ ] 自動テスト `tests/`
-  - [ ] test_config.py（ロード・検証・不正キー拒否）
-  - [ ] test_regime.py（9セル分類・閾値注入）
-  - [ ] test_engine.py（run_day 実行フロー・exit 判定）
-- [ ] デモ（VHS）および README
-  - [ ] examples/trend/demo.tape の作成と demo.gif の生成
-  - [ ] README.md の本格化（repo-readme・JUDGE.md 統合）と英語版（readme-i18n）
-- [ ] PyPI 公開（リポ公開 = repo-publish 後）
+- [x] Dotfiles から `src/bt_dynamic/` へのコア移植（依存逆転の解消込み）・pyproject・CLI
+- [x] 適用例 `examples/trend/`（ダミー設定・合成データ・README）
+- [x] 自動テスト `tests/`（src ミラー配置）
+- [x] デモ（VHS）: examples/trend/demo.tape + demo.gif
+- [x] 実データ導線: docs/fetch-data.md（Dukascopy 1h・規約整理）+ `bt-dynamic-convert`
+- [x] 差し替え UX: `--param key=value` / `--indicators file.py` / `--json`
+- [ ] README.md の本格化（repo-readme・JUDGE.md 統合）と英語版（readme-i18n）
+- [ ] 公開前点検（repo-standardize: CI・.claude/・issues/ 足場）→ 公開（repo-publish）→ About（repo-about）
+- [ ] PyPI 公開（リポ公開後）
 - [ ] ops_dynamic の参照を PYTHONPATH から pip 依存へ切り替え（別リポ作業）
 
-注: dotfiles 版の比較スクリプト群（compare_dynamic / compare_lot / compare_regimes / analyze）は MVP に含めない。「比較で仮説を潰す作法」は README/Zenn で語り、コードの移植は利用ニーズが立ってから判断する。
+注: dotfiles 版の比較スクリプト群（compare_dynamic / compare_lot / compare_regimes / analyze）は移植しない。比較は `--json` 出力を並べる汎用ワークフローで代替し、「比較で仮説を潰す作法」は README/Zenn で語る。

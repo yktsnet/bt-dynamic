@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import date, datetime, timedelta
 
-from bt_dynamic.config import Config
+from bt_dynamic.config import Config, parse_param_overrides
 from bt_dynamic.data import load_jsonl
-from bt_dynamic.engine import run_day, summarize
+from bt_dynamic.engine import run_day, summarize, summarize_dict
+from bt_dynamic.indicators import DEFAULT_INDICATORS, load_indicator_file
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -25,6 +27,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="config JSON path (default: $BT_DYNAMIC_CONFIG)",
     )
     p.add_argument("--data", required=True, help="JSONL bar data path")
+    p.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override a config parameter for this run (repeatable), "
+        "e.g. --param tp_pips=15 --param ax1_weak=20",
+    )
+    p.add_argument(
+        "--indicators",
+        default=None,
+        metavar="FILE.py",
+        help="Python file defining INDICATORS = IndicatorSet(...) to replace the "
+        "default ADX/ATR/RSI",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        help="print a machine-readable JSON summary instead of the text report",
+    )
     p.add_argument(
         "--start",
         default=None,
@@ -70,7 +92,19 @@ def _business_days_from(start: date, end: date, limit: int | None) -> list[date]
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    config = Config.load(args.config)
+    try:
+        config = Config.load(args.config)
+        overrides = parse_param_overrides(args.param)
+        if overrides:
+            config = config.override(**overrides)
+        indicators = (
+            load_indicator_file(args.indicators)
+            if args.indicators
+            else DEFAULT_INDICATORS
+        )
+    except (FileNotFoundError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     df = load_jsonl(args.data)
 
     dates = sorted(set(df.index.date))
@@ -90,12 +124,13 @@ def main(argv: list[str] | None = None) -> int:
             df,
             str(target),
             config,
+            indicators=indicators,
             use_dynamic=args.dynamic,
             lookback_days=args.lookback,
             multi_position=args.multi,
         )
         all_trades.extend(trades)
-        if args.quiet:
+        if args.quiet or args.json:
             continue
         print(f"--- {target} ({target.strftime('%a')}) : {len(trades)} trade(s) ---")
         for t in trades:
@@ -106,7 +141,23 @@ def main(argv: list[str] | None = None) -> int:
                 f"{t['result_pips']:+.2f}pips [{t['exit']}]"
             )
 
-    summarize(all_trades)
+    if args.json:
+        result = {
+            "meta": {
+                "config": args.config,
+                "data": args.data,
+                "start": str(start),
+                "days": args.days,
+                "dynamic": args.dynamic,
+                "multi": args.multi,
+                "indicators": args.indicators,
+                "param_overrides": overrides,
+            },
+            "summary": summarize_dict(all_trades),
+        }
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        summarize(all_trades)
     return 0
 
 

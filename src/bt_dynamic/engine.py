@@ -299,6 +299,40 @@ def run_day(
     return trades
 
 
+def summarize_dict(trades: list[dict]) -> dict:
+    """Summarize trades as plain data, for ``--json`` output and run comparison."""
+    if not trades:
+        return {"trades": 0}
+
+    df = pd.DataFrame(trades)
+
+    def breakdown(col: str) -> dict:
+        agg = df.groupby(col)["result_pips"].agg(["count", "sum", "mean"])
+        return {
+            str(key): {
+                "count": int(row["count"]),
+                "sum": round(float(row["sum"]), 2),
+                "mean": round(float(row["mean"]), 2),
+            }
+            for key, row in agg.iterrows()
+        }
+
+    wins = int((df["result_pips"] > 0).sum())
+    return {
+        "trades": len(df),
+        "wins": wins,
+        "losses": len(df) - wins,
+        "win_rate": round(wins / len(df), 3),
+        "total_pips": round(float(df["result_pips"].sum()), 2),
+        "avg_pips": round(float(df["result_pips"].mean()), 2),
+        "best_pips": round(float(df["result_pips"].max()), 2),
+        "worst_pips": round(float(df["result_pips"].min()), 2),
+        "by_exit": breakdown("exit"),
+        "by_cell_mode": breakdown("cell_mode"),
+        "by_regime": breakdown("regime"),
+    }
+
+
 def summarize(trades: list[dict]) -> pd.DataFrame | None:
     """Print a result summary and return the trades as a DataFrame."""
     if not trades:

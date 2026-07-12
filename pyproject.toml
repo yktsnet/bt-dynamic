@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 bt-dynamic = "bt_dynamic.cli:main"
+bt-dynamic-convert = "bt_dynamic.convert:main"
 
 [project.urls]
 Repository = "https://github.com/yktsnet/bt-dynamic"
