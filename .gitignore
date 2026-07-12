@@ -11,10 +11,20 @@ venv/
 data/
 *.jsonl
 *.csv
+# ... except the committed synthetic sample (not market data)
+!examples/trend/data/
+!examples/trend/data/sample_m5.jsonl
 
 # Secrets
 .env
 
+# Python packaging
+dist/
+*.egg-info/
+.pytest_cache/
+
 # Demo build artifacts (VHS)
 *.gif
 *.mp4
+# ... except the README demo
+!examples/trend/demo.gif

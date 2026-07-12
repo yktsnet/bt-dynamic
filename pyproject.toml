@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bt-dynamic"
+version = "0.1.0"
+description = "Backtest engine for dynamic regime switching: classify the market into a 9-cell grid and switch between trend-following and mean-reversion per regime"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "yktsnet" }]
+keywords = ["backtest", "trading", "regime", "quantitative-finance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+]
+
+[project.scripts]
+bt-dynamic = "bt_dynamic.cli:main"
+
+[project.urls]
+Repository = "https://github.com/yktsnet/bt-dynamic"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
