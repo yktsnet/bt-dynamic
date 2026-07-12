@@ -11,7 +11,7 @@ __version__ = "0.1.0"
 
 from bt_dynamic.config import Config, Params
 from bt_dynamic.data import load_jsonl
-from bt_dynamic.engine import run_day, summarize, summarize_dict
+from bt_dynamic.engine import debug_day, run_day, summarize, summarize_dict
 from bt_dynamic.indicators import DEFAULT_INDICATORS, IndicatorSet, load_indicator_file
 from bt_dynamic.regime import classify
 
@@ -20,6 +20,7 @@ __all__ = [
     "Params",
     "load_jsonl",
     "run_day",
+    "debug_day",
     "summarize",
     "summarize_dict",
     "DEFAULT_INDICATORS",

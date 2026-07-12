@@ -81,6 +81,67 @@ def test_cli_custom_indicators(tmp_path, capsys):
     assert code == 0
 
 
+def test_cli_cells_filter(capsys):
+    # the example config only trades cells (0,0) (0,1) (2,1) (2,2);
+    # restricting to a never-hit cell must yield zero trades
+    code = main(
+        [
+            "--config", str(EXAMPLE / "config.json"),
+            "--data", str(EXAMPLE / "data" / "sample_m5.jsonl"),
+            "--cells", "1,1",
+            "--json",
+        ]
+    )
+    assert code == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["summary"]["trades"] == 0
+
+
+def test_cli_bad_cells(capsys):
+    code = main(
+        [
+            "--config", str(EXAMPLE / "config.json"),
+            "--data", str(EXAMPLE / "data" / "sample_m5.jsonl"),
+            "--cells", "strong",
+        ]
+    )
+    assert code == 2
+    assert "--cells" in capsys.readouterr().err
+
+
+def test_cli_debug_dump(capsys):
+    code = main(
+        [
+            "--config", str(EXAMPLE / "config.json"),
+            "--data", str(EXAMPLE / "data" / "sample_m5.jsonl"),
+            "--start", "2025-01-09",
+            "--days", "1",
+            "--debug",
+        ]
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "decision points" in out
+    assert "ENTRY" in out or "skip(" in out
+
+
+def test_cli_multiple_data_files(tmp_path, capsys):
+    # split the sample into two files; concatenation must behave like the whole
+    lines = (EXAMPLE / "data" / "sample_m5.jsonl").read_text().strip().splitlines()
+    half = len(lines) // 2
+    a, b = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    a.write_text("\n".join(lines[:half]) + "\n")
+    b.write_text("\n".join(lines[half:]) + "\n")
+
+    for data_args in ([str(a), str(b)], [str(EXAMPLE / "data" / "sample_m5.jsonl")]):
+        code = main(["--config", str(EXAMPLE / "config.json"), "--data", *data_args, "--json"])
+        assert code == 0
+
+    outputs = capsys.readouterr().out.strip().splitlines()
+    split_run, whole_run = (json.loads(line)["summary"] for line in outputs)
+    assert split_run == whole_run
+
+
 def test_cli_bad_indicator_file(tmp_path, capsys):
     indicator_file = tmp_path / "bad.py"
     indicator_file.write_text("X = 1\n")

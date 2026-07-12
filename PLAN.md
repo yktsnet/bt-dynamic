@@ -119,9 +119,18 @@ bt-dynamic/
 - [x] デモ（VHS）: examples/trend/demo.tape + demo.gif
 - [x] 実データ導線: docs/fetch-data.md（Dukascopy 1h・規約整理）+ `bt-dynamic-convert`
 - [x] 差し替え UX: `--param key=value` / `--indicators file.py` / `--json`
-- [ ] README.md の本格化（repo-readme・JUDGE.md 統合）と英語版（readme-i18n）
-- [ ] 公開前点検（repo-standardize: CI・.claude/・issues/ 足場）→ 公開（repo-publish）→ About（repo-about）
-- [ ] PyPI 公開（リポ公開後）
-- [ ] ops_dynamic の参照を PYTHONPATH から pip 依存へ切り替え（別リポ作業）
+残りは以下の**固定順**で進める（スキルの依存関係由来。順番をセッションごとに再判断しない）:
+
+1. [ ] （任意・小）dotfiles 版の残機能移植: `--cells` フィルタ / debug_day 相当の判定ポイント出力
+2. [ ] **repo-standardize** — 公開前点検・足場（CI・.claude/・issues/・コアメッセージ1文の確定まで）。readme-guide §1・§3 はここの管轄
+3. [ ] **repo-readme** — README 本格化（アウトライン以降・Design Decisions への JUDGE.md 統合・docs/ 分離）
+4. [ ] **readme-i18n** — 英語版 README.en.md
+5. [ ] **repo-publish** — シークレットスキャン → Public 化 → ruleset/auto-merge
+6. [ ] **repo-about** — About/topics 設定（公開後）
+7. [ ] PyPI 公開（0.1.0）
+8. [ ] ops_dynamic の参照を PYTHONPATH から pip 依存へ切り替え（別リポ作業）
+9. [ ] 完走後、Issue ドリブン期へ移行（user がスキルで実施）
+
+根拠: standardize は「動くコードがあるリポ」前提でコアメッセージ確定までを行い、repo-readme がそれを受けて本格構成を書く。i18n は日本語 README 確定後。publish は README 完成後。About は README から生成するが `gh repo edit` は公開後にまとめて行う。
 
 注: dotfiles 版の比較スクリプト群（compare_dynamic / compare_lot / compare_regimes / analyze）は移植しない。比較は `--json` 出力を並べる汎用ワークフローで代替し、「比較で仮説を潰す作法」は README/Zenn で語る。

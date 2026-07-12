@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from datetime import date, datetime, timedelta
+
+import pandas as pd
 
 from bt_dynamic.config import Config, parse_param_overrides
 from bt_dynamic.data import load_jsonl
-from bt_dynamic.engine import run_day, summarize, summarize_dict
+from bt_dynamic.engine import debug_day, run_day, summarize, summarize_dict
 from bt_dynamic.indicators import DEFAULT_INDICATORS, load_indicator_file
 
 
@@ -26,7 +29,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="config JSON path (default: $BT_DYNAMIC_CONFIG)",
     )
-    p.add_argument("--data", required=True, help="JSONL bar data path")
+    p.add_argument(
+        "--data",
+        required=True,
+        nargs="+",
+        help="JSONL bar data path(s); multiple files are concatenated",
+    )
+    p.add_argument(
+        "--cells",
+        nargs="*",
+        metavar="AX1,AX2",
+        default=None,
+        help="only keep these cells active, e.g. --cells 1,0 0,1 "
+        "(all other cells are treated as flat)",
+    )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="dump every decision point (classifier view, ignores position state) "
+        "instead of running trades",
+    )
     p.add_argument(
         "--param",
         action="append",
@@ -80,6 +102,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def _filter_cells(config: Config, cells: list[str]) -> Config:
+    """Keep only the listed cells active; all others become flat."""
+    active = set()
+    for cell in cells:
+        try:
+            ax1, ax2 = (int(x) for x in cell.split(","))
+        except ValueError:
+            raise ValueError(f"--cells expects 'ax1,ax2', got {cell!r}") from None
+        active.add((ax1, ax2))
+    filtered = {
+        cell: (mode if cell in active else None)
+        for cell, mode in config.regime_strategy.items()
+    }
+    return replace(config, regime_strategy=filtered)
+
+
+def _print_debug_day(target: date, records: list[dict]) -> None:
+    print(f"\n{target} decision points ({len(records)})")
+    print(
+        f"{'time':6} {'ax1':>6} {'vol':>6} {'dir':>6} | "
+        f"{'c1':>2} {'c2':>2} {'bias':>5} | {'cell_mode':9} {'action':>14}"
+    )
+    print("-" * 72)
+    for r in records:
+        if r["action"] == "skip(nan)":
+            print(f"{r['time'].strftime('%H:%M'):6} NaN - skip")
+            continue
+        print(
+            f"{r['time'].strftime('%H:%M'):6} {r['ax1']:6.1f} {r['vol_ratio']:6.2f} "
+            f"{r['direction_val']:6.1f} | {r['ax1_class']:2} {r['ax2_class']:2} "
+            f"{str(r['direction']):>5} | {r['cell_mode'] or 'no_trade':9} "
+            f"{r['action']:>14}"
+        )
+
+
 def _business_days_from(start: date, end: date, limit: int | None) -> list[date]:
     days: list[date] = []
     current = start
@@ -97,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         overrides = parse_param_overrides(args.param)
         if overrides:
             config = config.override(**overrides)
+        if args.cells is not None:
+            config = _filter_cells(config, args.cells)
         indicators = (
             load_indicator_file(args.indicators)
             if args.indicators
@@ -105,7 +164,10 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    df = load_jsonl(args.data)
+
+    frames = [load_jsonl(path) for path in args.data]
+    df = pd.concat(frames).sort_index()
+    df = df[~df.index.duplicated(keep="first")]
 
     dates = sorted(set(df.index.date))
     if args.start:
@@ -117,6 +179,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         start = dates[1]
     targets = _business_days_from(start, dates[-1], args.days)
+
+    if args.debug:
+        for target in targets:
+            _print_debug_day(target, debug_day(df, str(target), config, indicators))
+        return 0
 
     all_trades = []
     for target in targets:

@@ -64,6 +64,24 @@ INDICATORS = IndicatorSet(
 )
 ```
 
+**セルの絞り込み**は `--cells`（指定外のセルはノーポジ扱い）:
+
+```bash
+bt-dynamic --config c.json --data bars.jsonl --cells 2,1 2,2
+```
+
+**「なぜここでエントリーしなかったか」**は `--debug` で全判定ポイントを吐く（ポジション状態を無視した分類器ビュー）:
+
+```bash
+bt-dynamic --config c.json --data bars.jsonl --start 2025-01-09 --days 1 --debug
+```
+
+`--data` は複数ファイルを受ける（日別・年別に分かれたデータをそのまま渡せる）:
+
+```bash
+bt-dynamic --config c.json --data bars/2025-*.jsonl
+```
+
 **結果の比較**は `--json` で機械可読サマリーを吐き、好きに並べる:
 
 ```bash

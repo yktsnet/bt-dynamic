@@ -299,6 +299,94 @@ def run_day(
     return trades
 
 
+def debug_day(
+    df: pd.DataFrame,
+    date_str: str,
+    config: Config,
+    indicators: IndicatorSet = DEFAULT_INDICATORS,
+) -> list[dict]:
+    """Dump every decision point of one day, ignoring position state.
+
+    A pure classifier view for answering "why did it (not) enter here?":
+    indicator values, cell classification and the resulting action at each
+    decision point, with static thresholds.
+    """
+    params = config.params
+    target = pd.Timestamp(date_str).date()
+
+    prev = target - pd.Timedelta(days=1)
+    while prev.weekday() >= 5:
+        prev -= pd.Timedelta(days=1)
+
+    df_warm = df[df.index.date >= prev]
+    df_trade = df_warm[df_warm.index.date == target]
+    if df_trade.empty:
+        return []
+
+    ax1_s = indicators.compute_ax1(df_warm).reindex(df_trade.index)
+    ax2_s = indicators.compute_ax2(df_warm).reindex(df_trade.index)
+    dir_s = indicators.compute_direction(df_warm).reindex(df_trade.index)
+    ax2_mean_s = indicators.compute_ax2_mean(
+        indicators.compute_ax2(df_warm), params.ax2_mean_bars
+    ).reindex(df_trade.index)
+
+    df_window = df_trade[df_trade.index.hour < params.trade_end_hour]
+    n = len(df_window)
+    thresholds = _static_thresholds(params)
+
+    records = []
+    for bar_idx in range(params.bars_per_window, n, params.bars_per_window):
+        bar_time = df_window.index[bar_idx]
+        orig_idx = df_trade.index.get_loc(bar_time)
+
+        ax1_v = ax1_s.iloc[orig_idx]
+        ax2_v = ax2_s.iloc[orig_idx]
+        ax2_mean_v = ax2_mean_s.iloc[orig_idx]
+        dir_v = dir_s.iloc[orig_idx]
+
+        record = {"time": bar_time}
+        if any(pd.isna(v) for v in [ax1_v, ax2_v, ax2_mean_v, dir_v]):
+            records.append({**record, "action": "skip(nan)"})
+            continue
+
+        ax1_class, ax2_class, direction = classify(
+            ax1_v, ax2_v, ax2_mean_v, dir_v,
+            **thresholds,
+            direction_band=params.direction_band,
+            direction_center=params.direction_center,
+        )
+        cell_mode = config.regime_strategy.get((ax1_class, ax2_class))
+
+        if cell_mode is None:
+            action = "skip(no_trade)"
+        elif direction is None:
+            action = "skip(neutral)"
+        else:
+            actual = (
+                direction
+                if cell_mode == "follow"
+                else "SELL" if direction == "BUY" else "BUY"
+            )
+            action = f"ENTRY {actual}"
+
+        records.append(
+            {
+                **record,
+                "ax1": round(float(ax1_v), 1),
+                "vol_ratio": round(
+                    float(ax2_v / ax2_mean_v) if ax2_mean_v > 0 else 1.0, 2
+                ),
+                "direction_val": round(float(dir_v), 1),
+                "ax1_class": ax1_class,
+                "ax2_class": ax2_class,
+                "direction": direction,
+                "cell_mode": cell_mode,
+                "action": action,
+            }
+        )
+    return records
+
+
 def summarize_dict(trades: list[dict]) -> dict:
     """Summarize trades as plain data, for ``--json`` output and run comparison."""
     if not trades:

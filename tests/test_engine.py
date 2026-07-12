@@ -103,6 +103,42 @@ def test_run_day_insufficient_data():
     assert run_day(df, "2025-01-07", _permissive_config()) == []
 
 
+def test_debug_day_records():
+    from bt_dynamic.engine import debug_day
+
+    df = _make_bars("2025-01-06", days=2)
+    config = _permissive_config()
+
+    records = debug_day(df, "2025-01-07", config)
+
+    assert records, "decision points must be reported"
+    for r in records:
+        assert r["action"].startswith(("ENTRY", "skip("))
+    entered = [r for r in records if r["action"].startswith("ENTRY")]
+    assert entered, "an all-follow mapping on a trend must show entries"
+    for r in entered:
+        assert r["cell_mode"] == "follow"
+        assert r["action"] == f"ENTRY {r['direction']}"  # follow keeps the bias
+        assert {"ax1", "vol_ratio", "direction_val", "ax1_class", "ax2_class"} <= set(r)
+
+
+def test_debug_day_flip_shows_actual_direction():
+    from bt_dynamic.engine import debug_day
+
+    df = _make_bars("2025-01-06", days=2)
+    strategy = {f"{a},{b}": "flip" for a in range(3) for b in range(3)}
+    config = Config.from_dict(
+        {"parameters": {"direction_band": 2.0}, "regime_strategy": strategy}
+    )
+
+    entered = [
+        r for r in debug_day(df, "2025-01-07", config) if r["action"].startswith("ENTRY")
+    ]
+    assert entered
+    for r in entered:
+        assert r["action"] != f"ENTRY {r['direction']}"  # flip inverts the bias
+
+
 def test_run_day_dynamic_thresholds():
     # enough lookback days for percentile thresholds to kick in
     df = _make_bars("2025-01-06", days=5)

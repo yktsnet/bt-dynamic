@@ -16,6 +16,14 @@ ENV_CONFIG_PATH = "BT_DYNAMIC_CONFIG"
 
 ENTRY_MODES = ("follow", "flip")
 
+# pre-OSS config keys -> current generic names, used only for error hints
+LEGACY_PARAM_NAMES = {
+    "adx_weak": "ax1_weak",
+    "adx_strong": "ax1_strong",
+    "rsi_band": "direction_band",
+    "atr_mean_bars": "ax2_mean_bars",
+}
+
 Cell = tuple[int, int]
 
 
@@ -69,8 +77,14 @@ class Config:
         known = {f.name for f in fields(Params)}
         unknown = set(raw_params) - known
         if unknown:
+            hints = [
+                f"{key} -> {LEGACY_PARAM_NAMES[key]}"
+                for key in sorted(unknown)
+                if key in LEGACY_PARAM_NAMES
+            ]
+            hint = f" (renamed: {', '.join(hints)})" if hints else ""
             raise ValueError(
-                f"{source}: unknown parameter(s): {', '.join(sorted(unknown))}"
+                f"{source}: unknown parameter(s): {', '.join(sorted(unknown))}{hint}"
             )
         params = Params(**raw_params)
 
