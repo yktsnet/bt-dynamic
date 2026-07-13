@@ -130,7 +130,7 @@ my_strategies/
 bt-dynamic --config my_strategies/breakout/config.json --indicators my_strategies/breakout/indicators.py --data bars.jsonl
 ```
 
-エンジン（この package）は触らない。戦略の中身はあなたのファイルにだけ存在する。
+エンジン（この package）は触らない。戦略の中身は利用者のファイルにだけ存在する。
 
 ## Python API
 

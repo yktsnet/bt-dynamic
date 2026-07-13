@@ -3,10 +3,6 @@
 @context/conventions.md
 @context/structure.md
 
-## Phase
-
-**MVP期**（2026-07-12 user 決定）。開放チャットで直接実装してよい。
-
 ## Identity (One-sentence Definition)
 
 汎用部分 = 9セル動的レジーム切替のバックテストエンジン（pip package `bt-dynamic` / import `bt_dynamic`）。
