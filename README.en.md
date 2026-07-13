@@ -6,7 +6,7 @@
 
 A backtesting engine for dynamic regime switching. It classifies the market into a 9-cell grid (trend strength × volatility, three levels each) over short time windows, and implements a single hypothesis — switching between trend-following (follow), counter-trend (flip), and no-position (None) per cell — end to end, from classification through decision-making to verification.
 
-Static backtesting (fixing a strategy based on past performance) collapses when the market regime changes — dynamic regime switching is a counter to that problem, and this repository publishes the verification framework and methodology for it. **The production values of the cell mapping table, actual threshold numbers, performance results, and currency pairs are not published.** All of these are injected externally via configuration JSON and simply do not exist in the package or the repository (see [Scope](#scope) for where the line is drawn).
+Static backtesting (fixing a strategy based on past performance) collapses when the market regime changes. This repository's method is to confine dynamic switching — the counter to that problem — inside a deliberately small, fixed 9-cell frame. Because the frame is small, a human can compare it across seasonal and yearly windows, and the judgment loop works: only cells that survive multiple periods get promoted to live trading. **The production values of the cell mapping table, actual threshold numbers, performance results, and currency pairs are not published.** All of these are injected externally via configuration JSON and simply do not exist in the package or the repository (see [Scope](#scope) for where the line is drawn).
 
 ![demo](examples/trend/demo.gif)
 
@@ -47,13 +47,13 @@ flowchart LR
     E --> F["engine.summarize\nperformance aggregation"]
 ```
 
-`cli.py` is the layer that wires the above together. `Config.load()` injects the mapping table and thresholds externally, and `--indicators` / `--param` let you swap out indicators and parameters. Throughout this flow, `src/bt_dynamic/` never imports `examples/` or `ops_dynamic` (the production-side repository) — the dependency runs one way only.
+`cli.py` is the layer that wires the above together. `Config.load()` injects the mapping table and thresholds externally, and `--indicators` / `--param` let you swap out indicators and parameters. Throughout this flow, `src/bt_dynamic/` never imports `examples/` or the production-side repository — the dependency runs one way only.
 
 ## Tech Stack
 
 | Layer | Technology | Reason |
 |---|---|---|
-| Distribution | PyPI (hatchling build) | `ops_dynamic` already exists as a real consumer that embeds the core in production, so registry distribution is required. The absence of any mapping-table values inside the wheel is structural proof of separation |
+| Distribution | PyPI (hatchling build) | the live execution layer already exists as a real consumer that embeds the core via pip, so registry distribution is required. The absence of any mapping-table values inside the wheel is structural proof of separation |
 | Data processing | pandas / numpy | Expressive enough for per-bar indicator calculation and vectorized processing. Covers ADX/ATR/RSI without any additional numerical library |
 | CLI | argparse (standard library) | The design favors file swapping over an interactive wizard; argparse implements `--param` / `--indicators` overrides with no extra dependency |
 | Config injection | JSON + environment variable (`BT_DYNAMIC_CONFIG`) | An externally-injected format that protects the mapping table and thresholds through "structural separation" rather than "obfuscation." Ensures no production value exists in the code or the repository |
@@ -159,14 +159,15 @@ Which mode gets assigned to which cell is "the answer," and that is injected via
 
 See [docs/design-decisions.md](docs/design-decisions.md) for the full write-up of each decision.
 
-- **Chose pip (PyPI) distribution** — because `ops_dynamic` already exists as a real consumer that embeds the core in production. Replacing PYTHONPATH references with a version-pinned dependency, and the absence of any answer inside the wheel, is structural proof of separation
-- **Mapping table and parameters are injected externally via config JSON, not code** — secrecy is achieved through "structural separation" rather than "obfuscation." Because even neutral values in the mapping table's shape can hint at the edge, the mapping table itself — not just parameters — is externally injected (the environment variable only ever points to a file path)
-- **The core never imports the strategy (dependency inversion)** — the mapping table is passed as a `Config` argument, and loading it globally at import time was eliminated. This is the implementation side of "no answer exists in the wheel"
+- **Deliberately fix a small 9-cell frame** — the finer the classification, the less of the verification fits in a human head. Rather than the best classification, fix one that is small enough for comparison and judgment to work, then search for the optimum under that constraint. The boundaries never move either — moving them invalidates every past comparison. When the frame needs fixing, build another light frame instead
+- **Cells are selected by survival, not performance** — run seasonal and yearly windows and promote only the cells that stayed positive across multiple periods. A single good result never promotes, and a change that improves the total but breaks one window gets reverted
+- **Unresolved stays unresolved** — cells that never work, seasonal losses, and performance decay are kept on a ledger, neither finalized nor discarded. Whether a decay is temporary or structural is not decided until enough observation accumulates
+- **Entry is the next bar's open, one bar shifted** — this kills lookahead bias and simultaneously matches live fill conditions, where a bar is not final the instant it ends. The engine also owns the forced end-of-session close, keeping overnight P/L out of the verification
 - **The engine only knows abstract axes (ax1/ax2/direction)** — ADX/ATR/RSI are swappable default indicators. This abstraction is the precondition that makes `--indicators` swapping possible
+- **Mapping table and parameters load from one config JSON, explicitly** — no implicit loading at import time, no per-parameter env injection (it scatters configuration). The core never imports the strategy side; the dependency runs one way
 - **Swapping is done via CLI arguments and files, not an interactive wizard** — the target users can write Python, and the loop of swapping indicators/parameters and iterating is the tool's core value proposition
-- **No dedicated comparison scripts — generalized into `--json` output instead** — a dedicated script per hypothesis increases code and maintenance burden, and what was being compared would itself hint at the edge
-- **Real data acquisition is left to the user as the standard path** — since what the terms of use restrict is redistributing bulk data, not fetching or using it, the repository only ships fetch instructions and a converter; no data file is ever committed
-- **The strategy set is kept to a single one, `trend/`** — "one hypothesis carried end to end" is this repository's strength. Adding more strategies would both hint at the shape of the edge and add maintenance cost
+- **No dedicated comparison scripts — generalized into `--json` output instead** — grow a dedicated script per hypothesis and the comparison code outpaces the thing being verified
+- **No lot concept** — mix sizing into the decisions and the quality of the decision and the quality of the money management blur into one number. The engine sticks to reporting flat-lot pips; sizing belongs to the live execution layer
 
 ## Scope
 

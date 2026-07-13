@@ -35,4 +35,4 @@ JSONL bars ──data.load_jsonl──▶ DataFrame(time-indexed OHLC)
                      engine.summarize() / summarize_dict() で成績集計
 ```
 
-`cli.py` が上記を配線する層。`Config.load()` で対応表・閾値を外部注入し、`--indicators` / `--param` で指標・パラメータを差し替え可能にする。`src/bt_dynamic/` はこのフロー全体で `examples/` や `ops_dynamic`（本番側リポ）を import しない一方向依存。
+`cli.py` が上記を配線する層。`Config.load()` で対応表・閾値を外部注入し、`--indicators` / `--param` で指標・パラメータを差し替え可能にする。`src/bt_dynamic/` はこのフロー全体で `examples/` や本番側リポを import しない一方向依存。
