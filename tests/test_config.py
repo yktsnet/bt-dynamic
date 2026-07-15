@@ -43,6 +43,13 @@ def test_no_config_path_raises(monkeypatch):
         Config.load()
 
 
+def test_load_malformed_json_raises(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{not valid json")
+    with pytest.raises(json.JSONDecodeError):
+        Config.load(path)
+
+
 def test_unknown_parameter_rejected():
     with pytest.raises(ValueError, match="unknown parameter"):
         Config.from_dict({"parameters": {"tp_pip": 30.0}})

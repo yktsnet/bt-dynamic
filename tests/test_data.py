@@ -32,3 +32,18 @@ def test_load_jsonl_empty(tmp_path):
     path.write_text("")
     with pytest.raises(ValueError, match="no bars"):
         load_jsonl(path)
+
+
+def test_load_jsonl_duplicate_timestamps_preserved(tmp_path):
+    path = tmp_path / "bars.jsonl"
+    rows = [
+        {"time_utc": "2025-01-06T00:00:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0},
+        {"time_utc": "2025-01-06T00:00:00", "open": 2.0, "high": 2.1, "low": 1.9, "close": 2.0},
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    df = load_jsonl(path)
+
+    # duplicates are not deduped; a stable sort keeps the original relative order
+    assert len(df) == 2
+    assert df["open"].tolist() == [1.0, 2.0]

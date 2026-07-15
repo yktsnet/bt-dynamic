@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from bt_dynamic.config import Config, Params
-from bt_dynamic.engine import _check_exit, calc_result_pips, resolve_entry, run_day
+from bt_dynamic.engine import _check_exit, calc_result_pips, resolve_entry, run_day, summarize_dict
 
 PARAMS = Params()
 
@@ -146,3 +146,73 @@ def test_run_day_dynamic_thresholds():
 
     trades = run_day(df, "2025-01-10", config, use_dynamic=True, lookback_days=3)
     assert isinstance(trades, list)  # smoke: runs without error
+
+
+def _make_mixed_trend_bars(bars_per_day: int = 120):
+    """Alternating weak/strong trend days so ax1 (trend strength) actually varies,
+    unlike a single monotonic trend where it saturates and stays flat."""
+    rng = np.random.default_rng(3)
+    rows = []
+    price = 150.0
+    start = pd.Timestamp("2025-01-06")
+    drifts = [0.0005, 0.03, 0.0005, 0.03, 0.01]  # last day is the trade day
+    for day, drift in enumerate(drifts):
+        day_start = start + pd.Timedelta(days=day)
+        for i in range(bars_per_day):
+            open_ = price
+            close = open_ + drift + rng.normal(0, 0.01)
+            high = max(open_, close) + abs(rng.normal(0, 0.005))
+            low = min(open_, close) - abs(rng.normal(0, 0.005))
+            price = close
+            rows.append(
+                {
+                    "time": day_start + pd.Timedelta(minutes=5 * i),
+                    "open": open_,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                }
+            )
+    return pd.DataFrame(rows).set_index("time")
+
+
+def test_run_day_dynamic_thresholds_differ_from_static():
+    # dynamic thresholds must actually be derived from the data distribution,
+    # not merely run without error alongside the static config values.
+    df = _make_mixed_trend_bars()
+    config = _permissive_config()
+
+    static_trades = run_day(df, "2025-01-10", config)
+    dynamic_trades = run_day(df, "2025-01-10", config, use_dynamic=True, lookback_days=3)
+
+    assert static_trades and dynamic_trades
+    static_classes = {t["regime"][0] for t in static_trades}
+    dynamic_classes = {t["regime"][0] for t in dynamic_trades}
+    assert static_classes != dynamic_classes
+
+
+def test_summarize_dict_empty():
+    assert summarize_dict([]) == {"trades": 0}
+
+
+def test_summarize_dict_aggregates():
+    trades = [
+        {"exit": "TP", "cell_mode": "follow", "regime": (0, 0), "result_pips": 10.0},
+        {"exit": "SL", "cell_mode": "follow", "regime": (0, 0), "result_pips": -5.0},
+        {"exit": "TP", "cell_mode": "flip", "regime": (1, 1), "result_pips": 20.0},
+    ]
+
+    summary = summarize_dict(trades)
+
+    assert summary["trades"] == 3
+    assert summary["wins"] == 2
+    assert summary["losses"] == 1
+    assert summary["win_rate"] == pytest.approx(2 / 3, rel=1e-3)
+    assert summary["total_pips"] == pytest.approx(25.0)
+    assert summary["avg_pips"] == pytest.approx(25.0 / 3, rel=1e-3)
+    assert summary["best_pips"] == pytest.approx(20.0)
+    assert summary["worst_pips"] == pytest.approx(-5.0)
+    assert summary["by_exit"]["TP"]["count"] == 2
+    assert summary["by_exit"]["SL"]["count"] == 1
+    assert summary["by_cell_mode"]["follow"]["count"] == 2
+    assert summary["by_regime"]["(0, 0)"]["count"] == 2

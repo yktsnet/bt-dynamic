@@ -1,9 +1,18 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from bt_dynamic.cli import main
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "trend"
+
+
+def test_cli_help(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    assert "usage: bt-dynamic" in capsys.readouterr().out
 
 
 def test_cli_runs_example(capsys):
