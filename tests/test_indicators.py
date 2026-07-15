@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from bt_dynamic.indicators import compute_adx, compute_atr, compute_rsi
 
@@ -33,6 +34,33 @@ def test_compute_adx_higher_for_stronger_trend():
     strong_trend = _bars(strong_open, strong_close)
 
     assert compute_adx(strong_trend).iloc[-1] > compute_adx(noisy_flat).iloc[-1]
+
+
+def _seeded_walk_bars():
+    """seed 固定のランダムウォーク。参照値テストの共通入力。"""
+    rng = np.random.default_rng(42)
+    steps = rng.normal(0.05, 0.4, 40).round(3)
+    closes = 100 + np.cumsum(steps)
+    opens = np.concatenate([[100.0], closes[:-1]])
+    return pd.DataFrame(
+        {
+            "open": opens,
+            "high": np.maximum(opens, closes) + 0.15,
+            "low": np.minimum(opens, closes) - 0.15,
+            "close": closes,
+        }
+    )
+
+
+def test_indicator_reference_values():
+    # 既知入力に対する現行実装の値を契約として固定する（計算式の黙った変更を検出する）
+    df = _seeded_walk_bars()
+    assert compute_atr(df).iloc[20] == pytest.approx(0.5283656237627854)
+    assert compute_atr(df).iloc[-1] == pytest.approx(0.5715478873296775)
+    assert compute_adx(df).iloc[20] == pytest.approx(34.801697801807336)
+    assert compute_adx(df).iloc[-1] == pytest.approx(32.59521751741957)
+    assert compute_rsi(df).iloc[20] == pytest.approx(57.2736285211243)
+    assert compute_rsi(df).iloc[-1] == pytest.approx(62.66291438652425)
 
 
 def test_compute_rsi_reflects_direction():

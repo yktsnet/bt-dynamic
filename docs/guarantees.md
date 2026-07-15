@@ -69,12 +69,14 @@
 - `compute_atr` はフラット（値動きなし）な OHLC 系列に対して常に 0 を返す。
 - `compute_adx` はトレンドが強いほど高い値を返す（強いトレンド系列 > フラットなノイズ系列）。
 - `compute_rsi` は上昇トレンドで 50 超、下降トレンドで 50 未満を返す。
+- `compute_atr`/`compute_adx`/`compute_rsi` は、seed 固定のランダムウォーク系列（既知入力）に対して固定の参照値を返す（計算式の互換性を数値レベルで約束する）。
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | ATR とフラット相場 | `test_compute_atr_zero_for_flat_bars` |
 | ADX とトレンド強度 | `test_compute_adx_higher_for_stronger_trend` |
 | RSI と方向 | `test_compute_rsi_reflects_direction` |
+| 既知入力に対する参照値 | `test_indicator_reference_values` |
 
 ### 6. `tests/test_regime.py` — `bt_dynamic.regime`
 
@@ -113,6 +115,10 @@
 | 動的閾値モード（smoke） | `test_run_day_dynamic_thresholds` |
 | 動的閾値がデータ由来であること | `test_run_day_dynamic_thresholds_differ_from_static` |
 | 成績集計（`summarize_dict`） | `test_summarize_dict_empty`, `test_summarize_dict_aggregates` |
+
+## Gaps
+
+現時点でなし（対象範囲内で保証化を見送ったテスト欠落は無い）。
 
 ## About
 
