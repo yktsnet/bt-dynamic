@@ -1,6 +1,6 @@
-# 保証台帳
+# Guarantee Ledger
 
-## 保証
+## Guarantees
 
 ### 1. `tests/test_cli.py` — `bt-dynamic` CLI (`bt_dynamic.cli.main`)
 
@@ -114,14 +114,6 @@
 | 動的閾値がデータ由来であること | `test_run_day_dynamic_thresholds_differ_from_static` |
 | 成績集計（`summarize_dict`） | `test_summarize_dict_empty`, `test_summarize_dict_aggregates` |
 
-## 欠落候補（未保証）
+## About
 
-現時点で無し。前回の棚卸しで挙がった6件（indicators直接テスト・動的閾値の実質検証・不正JSON・重複タイムスタンプ・summarize_dict・`--help`）はすべてテストを追加し本体へ格上げ済み。
-
-## この台帳について
-
-対象範囲は本リポの**契約面**——pip パッケージ `bt-dynamic`（import `bt_dynamic`）の公開 API と、コンソールスクリプト `bt-dynamic` / `bt-dynamic-convert` の外部から観測可能な振る舞い。アンダースコア始まりの関数（`_check_exit` 等）や CLI 内部のヘルパー（`_filter_cells` 等）は内部実装として対象外とする。
-
-構成はテストファイル単位。各ファイルの本文は保証そのもの（宣言文）で、末尾の表は「どの保証をどのテストが裏付けているか」の索引。
-
-**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 本台帳の地位は [design-decisions.md](design-decisions.md) と同格であり、実装が本台帳と食い違う場合はどちらが正しいかをその場で指摘する。
+対象は pip パッケージ `bt-dynamic`（`bt_dynamic`）の公開 API と、コンソールスクリプト `bt-dynamic` / `bt-dynamic-convert` の外部から観測可能な振る舞い。対象外はアンダースコア始まりの関数・CLI 内部ヘルパー。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 地位は [design-decisions.md](design-decisions.md) と同格。
