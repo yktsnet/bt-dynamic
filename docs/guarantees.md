@@ -116,10 +116,6 @@
 | 動的閾値がデータ由来であること | `test_run_day_dynamic_thresholds_differ_from_static` |
 | 成績集計（`summarize_dict`） | `test_summarize_dict_empty`, `test_summarize_dict_aggregates` |
 
-## Gaps
-
-現時点でなし（対象範囲内で保証化を見送ったテスト欠落は無い）。
-
 ## About
 
 対象は pip パッケージ `bt-dynamic`（`bt_dynamic`）の公開 API と、コンソールスクリプト `bt-dynamic` / `bt-dynamic-convert` の外部から観測可能な振る舞い。対象外はアンダースコア始まりの関数・CLI 内部ヘルパー。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 地位は [design-decisions.md](design-decisions.md) と同格。
