@@ -143,6 +143,20 @@ trades = run_day(df, "2025-01-07", config)
 summarize(trades)
 ```
 
+Date selection and lot-method comparison are also callable as a library. The intended use is writing your own research scripts on top of this API rather than growing the CLI:
+
+```python
+from bt_dynamic.indicators import DEFAULT_INDICATORS
+from bt_dynamic.selection import business_days, rank_dates, sample_dates
+from bt_dynamic.sizing import apply_lot_strategy
+
+# pick target dates by descending volatility
+dates = rank_dates(df, business_days(start, 90), DEFAULT_INDICATORS.compute_ax2)
+
+# reweight the flat-lot results per cell (mapping injected via lot_strategy in config.json)
+sized = apply_lot_strategy(trades, config.lot_strategy)
+```
+
 ## The 9-cell framework
 
 Three indicators are each classified into three levels (0/1/2), and two of the axes combine to form a 9-cell grid. The third axis (the directional indicator) returns BUY / SELL / None, and the mode assigned to each cell decides whether to enter.
@@ -167,7 +181,7 @@ See [docs/design-decisions.md](docs/design-decisions.md) for the full write-up o
 - **Mapping table and parameters load from one config JSON, explicitly** — no implicit loading at import time, no per-parameter env injection (it scatters configuration). The core never imports the strategy side; the dependency runs one way
 - **Swapping is done via CLI arguments and files, not an interactive wizard** — the target users can write Python, and the loop of swapping indicators/parameters and iterating is the tool's core value proposition
 - **No dedicated comparison scripts — generalized into `--json` output instead** — grow a dedicated script per hypothesis and the comparison code outpaces the thing being verified
-- **No lot concept** — mix sizing into the decisions and the quality of the decision and the quality of the money management blur into one number. The engine sticks to reporting flat-lot pips; sizing belongs to the live execution layer
+- **The engine has no lot concept** — mix sizing into the decisions and the quality of the decision and the quality of the money management blur into one number. The engine sticks to reporting flat-lot pips; the `sizing` module reweights the results after the run (which cell uses which method is injected via `lot_strategy`). Production sizing still belongs to the live execution layer
 
 ## Scope
 

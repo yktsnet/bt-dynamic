@@ -143,6 +143,20 @@ trades = run_day(df, "2025-01-07", config)
 summarize(trades)
 ```
 
+対象日の選定とロット方式の比較もライブラリとして呼べる。CLI に薄いスクリプトを足すのではなく、この API の上に自分の研究スクリプトを書く使い方を想定している:
+
+```python
+from bt_dynamic.indicators import DEFAULT_INDICATORS
+from bt_dynamic.selection import business_days, rank_dates, sample_dates
+from bt_dynamic.sizing import apply_lot_strategy
+
+# ボラティリティの高い順に対象日を選ぶ
+dates = rank_dates(df, business_days(start, 90), DEFAULT_INDICATORS.compute_ax2)
+
+# flat lot の結果に、セルごとの重み付け（config.json の lot_strategy で注入）を事後適用
+sized = apply_lot_strategy(trades, config.lot_strategy)
+```
+
 ## The 9-Cell Framework
 
 3 指標を 3 段階（0/1/2）に分類し、2 軸の組み合わせで 9 セルを構成する。3 軸目（方向指標）が BUY / SELL / None を返し、各セルに割り当てたモードがエントリーを決める。
@@ -167,7 +181,7 @@ summarize(trades)
 - **対応表・パラメータは設定 JSON 一本の明示ロード** — import 時の暗黙ロードなし、パラメータ個別の env 注入なし（設定の散逸を招く）。コアは戦略側を import しない一方向依存
 - **差し替えは CLI 引数とファイルで行い、対話ウィザードにしない** — 利用者は Python を書ける層であり、インジケーター/パラメータを差し替えて回すループ自体がツールの本体価値
 - **比較スクリプトは持たず `--json` 出力に汎用化** — 仮説ごとに専用スクリプトを生やすと、比較のためのコードが検証対象より速く増える
-- **lot 概念を持たない** — lot を混ぜると判定の良し悪しと資金管理の良し悪しが同じ数字に混ざり、切り分けられなくなる。エンジンは flat lot の pips を報告する係に徹し、サイジングは実行層（本番側リポ）が持つ
+- **エンジンは lot 概念を持たない** — lot を混ぜると判定の良し悪しと資金管理の良し悪しが同じ数字に混ざり、切り分けられなくなる。エンジンは flat lot の pips を報告する係に徹し、重み付けの比較は `sizing` モジュールが実行後の結果に事後適用する（どのセルにどの方式かは `lot_strategy` で注入）。本番のサイジングは実行層（本番側リポ）が持つ
 
 ## Scope
 
