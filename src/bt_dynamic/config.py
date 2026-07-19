@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 
 ENV_CONFIG_PATH = "BT_DYNAMIC_CONFIG"
 
 ENTRY_MODES = ("follow", "flip")
+
+LOT_METHODS = ("flat", "proportional", "inverse")
 
 # pre-OSS config keys -> current generic names, used only for error hints
 LEGACY_PARAM_NAMES = {
@@ -53,6 +55,8 @@ class Params:
 class Config:
     params: Params
     regime_strategy: dict[Cell, str | None]
+    # cell -> sizing method; empty means unit lots (see bt_dynamic.sizing)
+    lot_strategy: dict[Cell, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Config":
@@ -88,8 +92,15 @@ class Config:
             )
         params = Params(**raw_params)
 
-        strategy = _parse_strategy(data.get("regime_strategy", {}), source)
-        return cls(params=params, regime_strategy=strategy)
+        strategy = _parse_cell_map(
+            data.get("regime_strategy", {}), source, "regime_strategy",
+            ENTRY_MODES, allow_null=True,
+        )
+        lot_strategy = _parse_cell_map(
+            data.get("lot_strategy", {}), source, "lot_strategy",
+            LOT_METHODS, allow_null=False,
+        )
+        return cls(params=params, regime_strategy=strategy, lot_strategy=lot_strategy)
 
     def override(self, **overrides) -> "Config":
         """Return a copy with some parameters replaced (e.g. from CLI ``--param``)."""
@@ -113,20 +124,25 @@ def parse_param_overrides(pairs: list[str]) -> dict:
     return overrides
 
 
-def _parse_strategy(raw: dict, source: str) -> dict[Cell, str | None]:
+def _parse_cell_map(
+    raw: dict, source: str, name: str, allowed: tuple[str, ...], allow_null: bool
+) -> dict[Cell, str | None]:
     """Convert ``{"0,1": "flip", ...}`` keys into ``{(0, 1): "flip", ...}``."""
-    strategy: dict[Cell, str | None] = {}
-    for key, mode in raw.items():
+    parsed: dict[Cell, str | None] = {}
+    for key, value in raw.items():
         try:
             ax1, ax2 = (int(x) for x in key.split(","))
         except ValueError:
             raise ValueError(
-                f"{source}: regime_strategy key must be 'ax1,ax2', got {key!r}"
+                f"{source}: {name} key must be 'ax1,ax2', got {key!r}"
             ) from None
-        if mode is not None and mode not in ENTRY_MODES:
+        if (value is None and not allow_null) or (
+            value is not None and value not in allowed
+        ):
+            null_hint = " or null" if allow_null else ""
             raise ValueError(
-                f"{source}: entry mode must be one of {ENTRY_MODES} or null, "
-                f"got {mode!r} for cell {key!r}"
+                f"{source}: {name} value must be one of {allowed}{null_hint}, "
+                f"got {value!r} for cell {key!r}"
             )
-        strategy[(ax1, ax2)] = mode
-    return strategy
+        parsed[(ax1, ax2)] = value
+    return parsed

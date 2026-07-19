@@ -61,8 +61,33 @@ def test_bad_strategy_key_rejected():
 
 
 def test_bad_entry_mode_rejected():
-    with pytest.raises(ValueError, match="entry mode"):
+    with pytest.raises(ValueError, match="regime_strategy value"):
         Config.from_dict({"regime_strategy": {"0,0": "reverse"}})
+
+
+def test_lot_strategy_parsed():
+    config = Config.from_dict(
+        {"lot_strategy": {"0,0": "flat", "1,0": "inverse", "2,1": "proportional"}}
+    )
+    assert config.lot_strategy[(0, 0)] == "flat"
+    assert config.lot_strategy[(1, 0)] == "inverse"
+    assert config.lot_strategy[(2, 1)] == "proportional"
+
+
+def test_lot_strategy_defaults_empty():
+    config = Config.from_dict({"parameters": {}, "regime_strategy": {}})
+    assert config.lot_strategy == {}
+
+
+def test_bad_lot_method_rejected():
+    with pytest.raises(ValueError, match="lot_strategy value"):
+        Config.from_dict({"lot_strategy": {"0,0": "martingale"}})
+
+
+def test_null_lot_method_rejected():
+    # unlike regime_strategy, "no sizing" is expressed by omitting the cell
+    with pytest.raises(ValueError, match="lot_strategy value"):
+        Config.from_dict({"lot_strategy": {"0,0": None}})
 
 
 def test_parse_param_overrides():

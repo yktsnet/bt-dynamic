@@ -36,9 +36,9 @@
 
 ### 3. `tests/test_config.py` — `bt_dynamic.config`
 
-- `Config.load(path)` は `parameters` と `regime_strategy` を読み、未指定パラメータは `Params()` のデフォルトにフォールバックする。`regime_strategy` のキーは `"a,b"` 形式でセルタプルに変換され、リストに無いセルは単に不在として扱われる。
+- `Config.load(path)` は `parameters`・`regime_strategy`・`lot_strategy` を読み、未指定パラメータは `Params()` のデフォルトにフォールバックする。`regime_strategy` / `lot_strategy` のキーは `"a,b"` 形式でセルタプルに変換され、リストに無いセルは単に不在として扱われる。`lot_strategy` を省略すると空 dict（単位ロット）になる。
 - config パスは環境変数 `BT_DYNAMIC_CONFIG` でも指定できる。パスも環境変数も無い場合は `FileNotFoundError` を送出する。
-- 未知のパラメータキーは `ValueError("unknown parameter")`、不正な `regime_strategy` キー形式は `ValueError("regime_strategy key")`、不正なエントリーモード（`follow`/`flip`/`None` 以外）は `ValueError("entry mode")` をそれぞれ送出する。
+- 未知のパラメータキーは `ValueError("unknown parameter")`、不正な `regime_strategy` キー形式は `ValueError("regime_strategy key")`、不正なエントリーモード（`follow`/`flip`/`None` 以外）は `ValueError("regime_strategy value")` をそれぞれ送出する。`lot_strategy` の値は `flat`/`proportional`/`inverse` のみ有効で、それ以外（`None` 含む — セルを外す場合は記載を省略する）は `ValueError("lot_strategy value")` を送出する。
 - 構文的に不正な JSON を渡すと `json.JSONDecodeError` を送出する（ラップせず素通しする）。
 - `parse_param_overrides` は `"key=value"` のリストを型付き dict に変換する。`=` の無い形式や未知キーはそれぞれ `ValueError("key=value")` / `ValueError("unknown parameter")` を送出する。
 - `Config.override(**kwargs)` は元の `Config` を変更せず新しいインスタンスを返す。
@@ -48,6 +48,8 @@
 | 設定読み込み | `test_load_example_config` |
 | 設定パス解決 | `test_env_var_fallback`, `test_no_config_path_raises` |
 | 入力検証 | `test_unknown_parameter_rejected`, `test_bad_strategy_key_rejected`, `test_bad_entry_mode_rejected` |
+| lot_strategy の読み込み | `test_lot_strategy_parsed`, `test_lot_strategy_defaults_empty` |
+| lot_strategy の検証 | `test_bad_lot_method_rejected`, `test_null_lot_method_rejected` |
 | 不正 JSON の扱い | `test_load_malformed_json_raises` |
 | パラメータ上書きのパース | `test_parse_param_overrides` |
 | 非破壊な上書き | `test_config_override` |
@@ -115,6 +117,34 @@
 | 動的閾値モード（smoke） | `test_run_day_dynamic_thresholds` |
 | 動的閾値がデータ由来であること | `test_run_day_dynamic_thresholds_differ_from_static` |
 | 成績集計（`summarize_dict`） | `test_summarize_dict_empty`, `test_summarize_dict_aggregates` |
+
+### 8. `tests/test_selection.py` — `bt_dynamic.selection`
+
+- `business_days(start, n)` は `start` から週末を飛ばして `n` 営業日を返す。
+- `season_range(year, season)` は季節窓の開始日（土日なら翌営業日にずらす）と営業日数を返す。未知の季節名は `ValueError("unknown season")` を送出する。
+- `daily_axis_mean(df, target, compute_axis)` は前営業日をウォームアップに使って対象日の軸平均を返し、データの無い日は NaN を返す。
+- `rank_dates(df, dates, compute_axis)` は軸の日次平均の降順で日付を返し、データの無い日（NaN）は結果から落とす。
+- `sample_dates(dates, n, seed)` は同じ seed で同じ結果を返し、`n` が母数を超える場合は全件を返す。
+
+| 保証（要約） | 対応テスト |
+|---|---|
+| 営業日生成 | `test_business_days_skips_weekends` |
+| 季節窓 | `test_season_range_starts_on_business_day`, `test_unknown_season_rejected` |
+| 日次軸平均 | `test_daily_axis_mean`, `test_daily_axis_mean_missing_day_is_nan` |
+| ランキング | `test_rank_dates_descending_and_drops_missing` |
+| サンプリング | `test_sample_dates_reproducible_and_capped` |
+
+### 9. `tests/test_sizing.py` — `bt_dynamic.sizing`
+
+- `lot_table(trades)` は `flat`/`proportional`/`inverse` の3方式のロットを返し、各方式は平均 1 に正規化される。`proportional` は `ax1` に対して増加、`inverse` は減少、`flat` は常に 1。
+- `apply_lot_strategy(trades, lot_strategy)` は各トレードに `lot` と `sized_pips`（`result_pips × lot`）を付与した新しいリストを返し、入力の trades は変更しない。空リストには空リストを返す。
+- trades に現れるセルが `lot_strategy` に無い場合は `ValueError("missing cell")` を送出する（デフォルトに倒さない）。
+
+| 保証（要約） | 対応テスト |
+|---|---|
+| ロット計算と正規化 | `test_lot_table_normalized_to_mean_one`, `test_lot_table_orderings` |
+| サイズ適用 | `test_apply_lot_strategy_sizes_pips`, `test_apply_lot_strategy_empty_trades` |
+| 未定義セルの拒否 | `test_apply_lot_strategy_missing_cell_rejected` |
 
 ## About
 

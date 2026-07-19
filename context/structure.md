@@ -9,6 +9,8 @@ bt-dynamic/
 │   ├── indicators.py              # IndicatorSet（ax1/ax2/direction を計算する関数の束）＋ default ADX/ATR/RSI
 │   ├── regime.py                  # classify() — 9セル分類の純関数
 │   ├── engine.py                  # run_day() / debug_day() / summarize() / summarize_dict()
+│   ├── selection.py               # バックテスト対象日の選定（営業日・季節窓・軸値ランキング・サンプリング）
+│   ├── sizing.py                  # 事後ロット計算（flat/proportional/inverse、Config.lot_strategy で注入）
 │   ├── convert.py                 # bt-dynamic-convert（dukascopy-node 出力 → JSONL 変換）
 │   └── cli.py                     # bt-dynamic コマンド本体（argparse）
 ├── examples/trend/             # トレンドフォロー適用例。中立・教科書的ダミー値のみ
