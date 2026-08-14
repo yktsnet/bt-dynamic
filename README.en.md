@@ -38,16 +38,21 @@ bt-dynamic --config my-config.json --data bars.jsonl
 
 ## Architecture
 
+The core of this repository is the decision that flips a strategy's direction per regime. `regime.classify` sorts each decision point into a 9-cell grid of trend strength × volatility, and `regime_strategy` returns the `follow` / `flip` / `flat` mode assigned to that cell.
+
 ```mermaid
-flowchart LR
-    A[JSONL bars] -->|data.load_jsonl| B[DataFrame\nOHLC]
-    B --> C["IndicatorSet\nax1 / ax2 / direction"]
-    C --> D["regime.classify\n9-cell classification"]
-    D --> E["engine.run_day\nlooks up regime_strategy\nfollow / flip / flat"]
-    E --> F["engine.summarize\nperformance aggregation"]
+flowchart TD
+    IND{{"IndicatorSet<br/>ax1 / ax2 / direction"}} --> CLS["regime.classify"]
+    CLS -->|"9 cells of trend × vol"| CELL{"regime_strategy"}
+    CELL -->|"follow"| KEEP["order as-is"]
+    CELL -->|"flip"| REV["reverse BUY ⇄ SELL"]
+    CELL -->|"flat"| NONE(["no order"])
+    CLS -.->|"direction in neutral band"| NONE
+    KEEP --> SUM["engine.summarize"]
+    REV --> SUM
 ```
 
-`cli.py` is the layer that wires the above together. `Config.load()` injects the mapping table and thresholds externally, and `--indicators` / `--param` let you swap out indicators and parameters. Throughout this flow, `src/bt_dynamic/` never imports `examples/` or the production-side repository — the dependency runs one way only.
+Upstream, `data.load_jsonl` reads JSONL bars into an OHLC DataFrame and `IndicatorSet` computes `ax1` (trend strength), `ax2` (volatility) and `direction`. `cli.py` is the layer that wires all of this together. `Config.load()` injects the mapping table and thresholds externally, and `--indicators` / `--param` let you swap out indicators and parameters. Throughout this flow, `src/bt_dynamic/` never imports `examples/` or the production-side repository — the dependency runs one way only.
 
 ## Tech Stack
 

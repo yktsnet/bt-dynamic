@@ -38,16 +38,21 @@ bt-dynamic --config my-config.json --data bars.jsonl
 
 ## Architecture
 
+中核は、レジームごとに戦略の向きを切り替える判断そのものにある。`regime.classify` がトレンド強度 × ボラティリティの9セルに分類し、`regime_strategy` がそのセルに割り当てられた `follow` / `flip` / `flat` を返す。
+
 ```mermaid
-flowchart LR
-    A[JSONL bars] -->|data.load_jsonl| B[DataFrame\nOHLC]
-    B --> C["IndicatorSet\nax1 / ax2 / direction"]
-    C --> D["regime.classify\n9セル分類"]
-    D --> E["engine.run_day\nregime_strategy を引いて\nfollow / flip / flat"]
-    E --> F["engine.summarize\n成績集計"]
+flowchart TD
+    IND{{"IndicatorSet<br/>ax1 / ax2 / direction"}} --> CLS["regime.classify"]
+    CLS -->|"trend × vol の9セル"| CELL{"regime_strategy"}
+    CELL -->|"follow"| KEEP["direction のまま発注"]
+    CELL -->|"flip"| REV["BUY ⇄ SELL 反転して発注"]
+    CELL -->|"flat"| NONE(["発注しない"])
+    CLS -.->|"direction が中立帯"| NONE
+    KEEP --> SUM["engine.summarize"]
+    REV --> SUM
 ```
 
-`cli.py` が上記を配線する層。`Config.load()` で対応表・閾値を外部注入し、`--indicators` / `--param` で指標・パラメータを差し替え可能にする。`src/bt_dynamic/` はこのフロー全体で `examples/` や本番側リポを import しない一方向依存。
+前段は `data.load_jsonl` が JSONL bars を OHLC の DataFrame に読み込み、`IndicatorSet` が `ax1`（トレンド強度）・`ax2`（ボラティリティ）・`direction` を算出する。`cli.py` がこの全体を配線する層。`Config.load()` で対応表・閾値を外部注入し、`--indicators` / `--param` で指標・パラメータを差し替え可能にする。`src/bt_dynamic/` はこのフロー全体で `examples/` や本番側リポを import しない一方向依存。
 
 ## Tech Stack
 
