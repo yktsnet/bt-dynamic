@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- `load_jsonl`: parse `time_utc` per row as ISO8601, so a single file may mix formats (e.g. with and without fractional seconds)
+
 ## 0.1.5
 
 - Add `validation` module: multi-day `run_period`, chronological `split_train_test`, per-cell `cell_breakdown`, ranked `param_sweep`
