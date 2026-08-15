@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Add `validation` module: multi-day `run_period`, chronological `split_train_test`, per-cell `cell_breakdown`, ranked `param_sweep`
+
 ## 0.1.4
 
 - Add `selection` module: business days, seasonal windows, axis-based date ranking, seeded sampling
