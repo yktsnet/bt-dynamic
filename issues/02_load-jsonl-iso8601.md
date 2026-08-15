@@ -2,7 +2,7 @@
 id: 02
 branch-slug: load-jsonl-iso8601
 github_issue:
-status: draft
+status: open
 type: fix
 対象: src/bt_dynamic/data.py, tests/test_data.py, docs/guarantees.md
 内容: 1つの JSONL 内で `time_utc` の表記が揺れていると `load_jsonl` が `ValueError` で落ちる。どちらも妥当な ISO8601 だが、pandas が先頭行から形式を推定して以降を同じ形式として解釈するため。バーの生成元が複数あると（例: 一括エクスポートした過去分と、後から日次で追記した分）容易に起きる。実データで実際に踏んだ。
