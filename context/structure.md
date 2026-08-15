@@ -11,6 +11,7 @@ bt-dynamic/
 │   ├── engine.py                  # run_day() / debug_day() / summarize() / summarize_dict()
 │   ├── selection.py               # バックテスト対象日の選定（営業日・季節窓・軸値ランキング・サンプリング）
 │   ├── sizing.py                  # 事後ロット計算（flat/proportional/inverse、Config.lot_strategy で注入）
+│   ├── validation.py               # 検証層（複数日連結・train/test分割・セル寄与分解・パラメータグリッド）
 │   ├── convert.py                 # bt-dynamic-convert（dukascopy-node 出力 → JSONL 変換）
 │   └── cli.py                     # bt-dynamic コマンド本体（argparse）
 ├── examples/trend/             # トレンドフォロー適用例。中立・教科書的ダミー値のみ
@@ -35,6 +36,8 @@ JSONL bars ──data.load_jsonl──▶ DataFrame(time-indexed OHLC)
                     follow/flip/flat を決定し、TP/SL ブラケットで日次バックテスト
                                         │
                      engine.summarize() / summarize_dict() で成績集計
+                                        │
+        validation.py が複数日連結・train/test分割・セル単独評価・パラメータグリッドで評価
 ```
 
 `cli.py` が上記を配線する層。`Config.load()` で対応表・閾値を外部注入し、`--indicators` / `--param` で指標・パラメータを差し替え可能にする。`src/bt_dynamic/` はこのフロー全体で `examples/` や本番側リポを import しない一方向依存。

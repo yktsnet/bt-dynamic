@@ -146,6 +146,24 @@
 | サイズ適用 | `test_apply_lot_strategy_sizes_pips`, `test_apply_lot_strategy_empty_trades` |
 | 未定義セルの拒否 | `test_apply_lot_strategy_missing_cell_rejected` |
 
+### 10. `tests/test_validation.py` — `bt_dynamic.validation`
+
+- `run_period(bars, dates, config)` は複数日・複数年にまたがるバーとその期間の営業日リストを受け取り、日ごとの `run_day` 結果を時系列順に連結したトレードのリストを返す。データが存在しない日は黙って飛ばし、例外を送出しない。`multi_position` 引数は `run_day` にそのまま渡る。
+- `split_train_test(dates, ratio)` は日付リストを時系列順のまま前後2つに分割する。シャッフル・ランダム抽出は行わない。`ratio` は train 側の割合で、0 または 1 に潰れる分割（両端含む）は `ValueError` を送出する。
+- `cell_breakdown(bars, dates, config)` は、`config.regime_strategy` に載っている（モードが `None` でない）各セルについて「そのセルだけを有効にした config」で個別にバックテストし、セルごとの成績（`summarize_dict` 形式）を `{cell: summary}` で返す。**セル単独の成績の合計は、全セルを同時に有効にした成績と一致しない**（単一ポジションモードではセル同士がポジションを奪い合うため）。この非加算性は仕様である。
+- `param_sweep(bars, dates, config, overrides)` は `Config.override(**kwargs)` で作った各設定を同一期間で評価し、合計 pips の降順に並べた結果を返す。各要素は `{"overrides": ..., "summary": ...}` の形で、与えた上書き内容と成績を持つ。上書き無しの元 config も必ず結果に含まれる。
+- 上記すべては純関数であり、渡された `Config` と `bars` を変更しない。ファイル I/O を行わず、設定を暗黙に読まない。
+
+| 保証（要約） | 対応テスト |
+|---|---|
+| 期間連結・欠損日のスキップ | `test_run_period_concatenates_in_order_and_skips_missing_days` |
+| train/test 分割の時系列保持 | `test_split_train_test_preserves_chronological_order` |
+| 潰れる ratio の拒否 | `test_split_train_test_rejects_degenerate_ratio`, `test_split_train_test_rejects_ratio_that_empties_small_input` |
+| セル単独評価の非加算性 | `test_cell_breakdown_is_not_additive_with_combined_run` |
+| 対象セルの絞り込み | `test_cell_breakdown_only_covers_active_cells` |
+| パラメータグリッドの並び | `test_param_sweep_includes_base_config_and_sorts_descending` |
+| 非破壊性（Config・DataFrame とも） | `test_functions_do_not_mutate_config_or_bars` |
+
 ## About
 
 対象は pip パッケージ `bt-dynamic`（`bt_dynamic`）の公開 API と、コンソールスクリプト `bt-dynamic` / `bt-dynamic-convert` の外部から観測可能な振る舞い。対象外はアンダースコア始まりの関数・CLI 内部ヘルパー。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 地位は [design-decisions.md](design-decisions.md) と同格。
