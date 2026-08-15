@@ -1,8 +1,45 @@
+## PR記録: fix: load_jsonl が混在した ISO8601 形式を読めない問題を修正
+issue: 02 (02_load-jsonl-iso8601.md)
+PR: https://github.com/yktsnet/bt-dynamic/pull/8
+Merged: eecaa11ee59ba7b1d22434f4111e0e8742169866
+
+## 変更内容
+`load_jsonl` の `pd.to_datetime(df["time_utc"])` が形式を暗黙推定していたため、
+同一 JSONL 内で `time_utc` の表記（秒の小数部・タイムゾーン指定子の有無）が
+揺れていると先頭行の形式に引きずられて `ValueError` になっていた。
+`format="ISO8601"` を明示し、行ごとに ISO8601 として解釈するよう修正した。
+`format="mixed"` は ISO8601 以外も推測しにいくため採用しなかった（不正な入力を
+黙って通す方向に倒れるため）。
+
+## 保証
+- 新規: `load_jsonl` は1ファイル内で `time_utc` の表記が揺れていても行ごとに
+  解釈して読み込む → `tests/test_data.py::test_load_jsonl_mixed_iso8601_formats`
+- 新規: ISO8601 として解釈できない文字列は引き続きエラー →
+  `tests/test_data.py::test_load_jsonl_invalid_time_still_rejected`
+- 維持（既存4件）: 影響なし。既存テスト全通過で確認。
+
+`docs/guarantees.md` セクション4に上記2テストと該当の保証1行を追加した。
+
+## 静的確認結果
+- `git diff --name-only --cached` は issue の対象フィールド
+  （`src/bt_dynamic/data.py`, `tests/test_data.py`, `docs/guarantees.md`）と完全一致。
+- caller 側（`cli.py` 等）は `load_jsonl(path)` の呼び出しシグネチャ・戻り値の
+  DataFrame 形状（`time` インデックス・`open/high/low/close` 列）を変更していない
+  ため影響なし。
+
+## 検証手順
+```
+nix-shell -p "python3.withPackages(ps: with ps; [pandas numpy pytest])" --run "PYTHONPATH=src pytest -q"
+```
+78 passed（pandas/numpy が環境に無いため nix-shell 経由で実行）。
+
+---
+
 ## `load_jsonl` が混在した ISO8601 形式を読めない
 id: 02
 branch-slug: load-jsonl-iso8601
-github_issue:
-status: open
+github_issue: 9
+status: close
 type: fix
 対象: src/bt_dynamic/data.py, tests/test_data.py, docs/guarantees.md
 内容: 1つの JSONL 内で `time_utc` の表記が揺れていると `load_jsonl` が `ValueError` で落ちる。どちらも妥当な ISO8601 だが、pandas が先頭行から形式を推定して以降を同じ形式として解釈するため。バーの生成元が複数あると（例: 一括エクスポートした過去分と、後から日次で追記した分）容易に起きる。実データで実際に踏んだ。
