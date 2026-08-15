@@ -28,5 +28,8 @@ def load_jsonl(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"{path}: missing column(s): {', '.join(missing)}")
 
-    df["time"] = pd.to_datetime(df["time_utc"])
+    # format="ISO8601" forces per-row parsing; without it pandas infers a
+    # single format from the first row and chokes if later rows differ
+    # (e.g. mixed presence of fractional seconds or a timezone suffix).
+    df["time"] = pd.to_datetime(df["time_utc"], format="ISO8601")
     return df.set_index("time").sort_index()[REQUIRED_COLUMNS]
