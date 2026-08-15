@@ -1,8 +1,50 @@
+## PR記録: feat: 検証モジュール（train/test分割・セル寄与分解・パラメータグリッド）を追加
+issue: 01 (01_validation-module.md)
+PR: https://github.com/yktsnet/bt-dynamic/pull/5
+Merged: 5e055a2605ca2cc7c249e408c05cb29ffa40ea43
+
+## 変更内容
+過去に、非連続・少数サンプルの季節窓で正だったセルが、連続フルヒストリーでは負・直近3年連続負だった実例があり、この種の検証（複数年連続実行・時系列train/test分割・セル単独寄与分解・パラメータグリッド内での現行値の順位）は毎回その場限りのスクリプトで書かれ使い捨てられてきた。これを常設APIにする。
+
+`src/bt_dynamic/validation.py` を新規追加し、`engine`/`config` の上に乗る評価層として以下4つの純関数を公開:
+- `run_period(bars, dates, config, ...)` — 複数日・複数年を跨いだ `run_day` 実行を時系列順に連結。データの無い日は例外を出さず黙って飛ばす。
+- `split_train_test(dates, ratio)` — 時系列順を保った前後分割。シャッフルなし。0/1に潰れる ratio は `ValueError`。
+- `cell_breakdown(bars, dates, config, ...)` — `dataclasses.replace` でセル単独の config を作り、セルごとの `summarize_dict` を返す。単一ポジションモードでのセル間のポジション奪い合いにより、単独評価の合計は全セル同時実行と一致しない（非加算性は仕様）。
+- `param_sweep(bars, dates, config, overrides, ...)` — `Config.override` で作った各設定を評価し、合計pips降順で返す。元configも必ず含む。具体的なパラメータ名はハードコードしない。
+
+すべて純関数（渡された `Config`・`bars` を変更しない）。`validation.py` は既存モジュールから import されない一方向依存。
+
+`context/structure.md` にツリー行とデータフロー図の評価層を追記。
+
+## 保証
+- `run_period` の複数日連結・欠損日スキップ・multi_positionの伝播 → `test_run_period_concatenates_in_order_and_skips_missing_days`
+- `split_train_test` の時系列順維持・潰れるratioの拒否 → `test_split_train_test_preserves_chronological_order`, `test_split_train_test_rejects_degenerate_ratio`, `test_split_train_test_rejects_ratio_that_empties_small_input`
+- `cell_breakdown` の非加算性・対象セル絞り込み → `test_cell_breakdown_is_not_additive_with_combined_run`, `test_cell_breakdown_only_covers_active_cells`
+- `param_sweep` の元config包含・降順ソート → `test_param_sweep_includes_base_config_and_sorts_descending`
+- 全関数の非破壊性（Config・DataFrameとも） → `test_functions_do_not_mutate_config_or_bars`
+- 維持保証（7. engine.run_day/summarize_dict、8. selection の営業日概念、9. sizing のロット非関与、3. Configのfrozen/override非破壊）は本Issueで変更せず、validationは呼び出すのみ。
+
+台帳 `docs/guarantees.md` に新セクション「10. tests/test_validation.py — bt_dynamic.validation」を追加。
+
+## 静的確認結果
+- `nix-shell -p "python3.withPackages(ps: with ps; [pandas numpy pytest])" --run "PYTHONPATH=src pytest -q"` → 76 passed
+- caller/import整合性: `validation.py` は `config`/`engine`/`indicators` のみ import し、既存モジュール側に `validation` への参照が無いことを確認（一方向依存を維持）
+- `git diff --name-only --cached`:
+  context/structure.md
+  docs/guarantees.md
+  src/bt_dynamic/validation.py
+  tests/test_validation.py
+
+## 検証手順
+Agent側の `pytest -q` で完結。追加の実行確認は不要。
+
+---
+
 ## 検証モジュール（train/test 分割・セル寄与分解・パラメータグリッド）を追加する
 id: 01
 branch-slug: validation-module
-github_issue:
-status: open
+github_issue: 6
+status: close
 type: feat
 対象: src/bt_dynamic/validation.py (新規), tests/test_validation.py (新規), docs/guarantees.md, context/structure.md
 内容: 設定の良し悪しを「全期間の合計 pips」だけで判断すると過学習を検出できない。過去に、非連続・少数サンプルの季節窓で正だったセルが、連続フルヒストリーでは負・直近3年連続負だった実例がある。この種の検証（複数年を連続で流す・時系列 train/test 分割・セル単独での寄与分解・パラメータグリッド内での現行値の順位）は毎回その場限りのスクリプトで書かれ、使い捨てられてきた。これをパッケージの常設 API にして、検証手順を再現可能にする。
