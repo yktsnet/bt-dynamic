@@ -59,12 +59,14 @@
 - `load_jsonl(path)` は `time_utc` 昇順にソートされた `open`/`high`/`low`/`close` 列の DataFrame を返す（入力の順序に依らない）。
 - 必須列が欠けている行は `ValueError("missing column")`、空ファイルは `ValueError("no bars")` を送出する。
 - 重複タイムスタンプはデデュープされない。安定ソートで元の相対順序を保ったまま両方残る。
+- 1ファイル内で `time_utc` の表記が揺れていても（秒の小数部の有無・タイムゾーン指定子の有無など、いずれも妥当な ISO8601 である限り）行ごとに解釈して読み込む。ISO8601 として解釈できない文字列は引き続きエラーになる。
 
 | 保証（要約） | 対応テスト |
 |---|---|
 | バー読み込み | `test_load_jsonl` |
 | 入力検証 | `test_load_jsonl_missing_column`, `test_load_jsonl_empty` |
 | 重複タイムスタンプ | `test_load_jsonl_duplicate_timestamps_preserved` |
+| 混在 ISO8601 形式の読み込み | `test_load_jsonl_mixed_iso8601_formats`, `test_load_jsonl_invalid_time_still_rejected` |
 
 ### 5. `tests/test_indicators.py` — `bt_dynamic.indicators`
 

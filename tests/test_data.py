@@ -34,6 +34,30 @@ def test_load_jsonl_empty(tmp_path):
         load_jsonl(path)
 
 
+def test_load_jsonl_mixed_iso8601_formats(tmp_path):
+    path = tmp_path / "bars.jsonl"
+    rows = [
+        {"time_utc": "2026-01-01T18:00:00.000000Z", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0},
+        {"time_utc": "2026-07-26T21:00:00Z", "open": 2.0, "high": 2.1, "low": 1.9, "close": 2.0},
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    df = load_jsonl(path)
+
+    assert len(df) == 2
+    assert df.index.is_monotonic_increasing
+    assert df["open"].tolist() == [1.0, 2.0]
+
+
+def test_load_jsonl_invalid_time_still_rejected(tmp_path):
+    path = tmp_path / "bars.jsonl"
+    path.write_text(
+        json.dumps({"time_utc": "not a time", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0}) + "\n"
+    )
+    with pytest.raises(ValueError):
+        load_jsonl(path)
+
+
 def test_load_jsonl_duplicate_timestamps_preserved(tmp_path):
     path = tmp_path / "bars.jsonl"
     rows = [
