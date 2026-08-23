@@ -1,9 +1,18 @@
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from bt_dynamic.config import Config, Params
-from bt_dynamic.engine import _check_exit, calc_result_pips, resolve_entry, run_day, summarize_dict
+from bt_dynamic.engine import (
+    _check_exit,
+    calc_result_pips,
+    dispersion,
+    resolve_entry,
+    run_day,
+    summarize_dict,
+)
 
 PARAMS = Params()
 
@@ -216,3 +225,45 @@ def test_summarize_dict_aggregates():
     assert summary["by_exit"]["SL"]["count"] == 1
     assert summary["by_cell_mode"]["follow"]["count"] == 2
     assert summary["by_regime"]["(0, 0)"]["count"] == 2
+
+
+def test_summarize_dict_carries_dispersion():
+    trades = [
+        {"exit": "TP", "cell_mode": "follow", "regime": (0, 0), "result_pips": 10.0},
+        {"exit": "SL", "cell_mode": "follow", "regime": (0, 0), "result_pips": -5.0},
+        {"exit": "TP", "cell_mode": "flip", "regime": (1, 1), "result_pips": 20.0},
+    ]
+
+    summary = summarize_dict(trades)
+
+    # sample std of [10, -5, 20] with ddof=1
+    assert summary["std_pips"] == pytest.approx(12.58, abs=0.01)
+    assert summary["stderr_pips"] == pytest.approx(12.58 / 3**0.5, abs=0.01)
+    assert summary["t_stat"] == pytest.approx(1.15, abs=0.01)
+    # the interval straddles zero, which is the whole point of reporting it
+    assert summary["ci95_low"] < 0 < summary["ci95_high"]
+    assert summary["ci95_low"] < summary["avg_pips"] < summary["ci95_high"]
+
+
+def test_dispersion_is_none_when_there_is_nothing_to_estimate():
+    single = dispersion(pd.Series([10.0]))
+    assert single["t_stat"] is None and single["std_pips"] is None
+
+    # every trade identical: a mean with no spread is not a measurement
+    flat = dispersion(pd.Series([10.0, 10.0, 10.0]))
+    assert flat["std_pips"] == 0.0
+    assert flat["t_stat"] is None
+    assert flat["ci95_low"] is None
+
+
+def test_summarize_dict_stays_json_serialisable():
+    """The CLI's --json mode dumps this dict; numpy scalars would break it."""
+    trades = [
+        {"exit": "TP", "cell_mode": "follow", "regime": (0, 0), "result_pips": 10.0},
+        {"exit": "SL", "cell_mode": "follow", "regime": (0, 0), "result_pips": -5.0},
+        {"exit": "TP", "cell_mode": "flip", "regime": (1, 1), "result_pips": 20.0},
+    ]
+
+    dumped = json.loads(json.dumps(summarize_dict(trades)))
+
+    assert dumped["t_stat"] == pytest.approx(1.15, abs=0.01)

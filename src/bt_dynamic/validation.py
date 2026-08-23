@@ -72,20 +72,26 @@ def cell_breakdown(
     config: Config,
     indicators: IndicatorSet = DEFAULT_INDICATORS,
     multi_position: bool = False,
+    cells: dict[Cell, str] | None = None,
 ) -> dict[Cell, dict]:
-    """Backtest each active cell of ``config.regime_strategy`` in isolation.
+    """Backtest cells in isolation, one run per cell.
 
-    Returns ``{cell: summarize_dict(...)}`` for every cell whose mode is not
-    ``None``. The per-cell sums do not add up to the all-cells-together
-    summary: in single-position mode, cells compete for the same position
-    slot, so isolating one cell frees it from that competition. This
-    non-additivity is expected, not a bug — observing both views separately
-    is the point of this function.
+    By default this covers only the cells ``config.regime_strategy`` acts on,
+    which for a single-cell config is a single row — not a view of the 9-cell
+    grid. Pass ``cells`` (e.g. ``{c: "follow" for c in ALL_CELLS}``) to also
+    score the cells the config leaves flat, which is the only way to ask
+    whether a cell was left out for a reason.
+
+    The per-cell sums do not add up to the all-cells-together summary: in
+    single-position mode, cells compete for the same position slot, so
+    isolating one cell frees it from that competition. This non-additivity is
+    expected, not a bug — observing both views separately is the point.
     """
+    mapping = cells if cells is not None else {
+        cell: mode for cell, mode in config.regime_strategy.items() if mode is not None
+    }
     results: dict[Cell, dict] = {}
-    for cell, mode in config.regime_strategy.items():
-        if mode is None:
-            continue
+    for cell, mode in mapping.items():
         solo_config = replace(config, regime_strategy={cell: mode})
         trades = run_period(
             bars, dates, solo_config, indicators=indicators, multi_position=multi_position
@@ -102,14 +108,19 @@ def param_sweep(
     indicators: IndicatorSet = DEFAULT_INDICATORS,
     multi_position: bool = False,
 ) -> list[dict]:
-    """Evaluate ``config`` plus each of ``overrides``, ranked by total pips.
+    """Evaluate ``config`` plus each of ``overrides``, ranked by t-statistic.
 
     Each ``overrides`` item is a ``dict`` of ``Config.override(**kwargs)``
     keyword arguments (concrete parameter names are the caller's concern,
     not this module's). The unmodified ``config`` is always included as an
     empty-override candidate, so the grid shows where the current values
-    rank. Results are sorted by ``summary["total_pips"]`` descending (trade-
-    less candidates, which have no ``total_pips`` key, sort as 0.0).
+    rank.
+
+    Ranking is by ``t_stat``, not by total pips: the candidate with the
+    largest sum is often just the one that took the most trades, and this
+    module exists to stop that number from deciding anything. Each result
+    also carries its ``trades``, so the caller can break a candidate down by
+    year or by train/test without re-running it.
     """
     candidates = [{}, *overrides]
     results = []
@@ -122,6 +133,14 @@ def param_sweep(
             indicators=indicators,
             multi_position=multi_position,
         )
-        results.append({"overrides": override, "summary": summarize_dict(trades)})
-    results.sort(key=lambda r: r["summary"].get("total_pips", 0.0), reverse=True)
+        results.append(
+            {"overrides": override, "summary": summarize_dict(trades), "trades": trades}
+        )
+    results.sort(key=_rank_key, reverse=True)
     return results
+
+
+def _rank_key(result: dict) -> tuple[int, float]:
+    """Sort key for :func:`param_sweep`: t-statistic, undefined ones last."""
+    t_stat = result["summary"].get("t_stat")
+    return (0, 0.0) if t_stat is None else (1, t_stat)

@@ -88,6 +88,7 @@
 - 方向の中立帯の境界値ちょうどは中立（`None`）に倒れる。ボラティリティ比の平均が 0 の場合はクラス 1 にフォールバックする。
 - 閾値（`ax1_weak`/`vol_hi` 等）は呼び出し側から注入され、同じ入力値でも閾値次第で分類結果が変わる。
 - `direction_center` を指定すると中立帯の中心をずらせる（デフォルトは 50）。
+- `ALL_CELLS` は `classify` が返しうる9セルすべてのタプルで、重複を含まない。
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -95,6 +96,7 @@
 | 境界条件 | `test_classify_band_edges` |
 | 閾値の外部注入 | `test_classify_injected_thresholds` |
 | 方向中心のカスタマイズ | `test_classify_custom_direction_center` |
+| 全セルの列挙 | `test_all_cells_covers_every_class_pair_classify_can_return` |
 
 ### 7. `tests/test_engine.py` — `bt_dynamic.engine`
 
@@ -106,7 +108,9 @@
 - `debug_day(df, date, config)` は判定ごとのレコードを返し、各レコードの `action` は `ENTRY...` または `skip(...)` で始まる。`ENTRY` レコードは `ax1`/`vol_ratio`/`direction_val`/`ax1_class`/`ax2_class` を含む。`follow` セルは `action` がバイアス方向と一致し、`flip` セルは逆方向になる。
 - `run_day(..., use_dynamic=True, lookback_days=N)` はエラーなく走る。
 - `--dynamic`（`use_dynamic=True`）の閾値は静的な config 値ではなく、直近 `lookback_days` 営業日のデータ分布（パーセンタイル）から実際に導出される。トレンド強度が日によって変動するデータでは、静的閾値と動的閾値でトレードの `regime` 分類（`ax1_class`）が異なる。
-- `summarize_dict(trades)` は空リストに `{"trades": 0}` を返し、非空リストには `trades`/`wins`/`losses`/`win_rate`/`total_pips`/`avg_pips`/`best_pips`/`worst_pips` と `by_exit`/`by_cell_mode`/`by_regime` の内訳を返す。
+- `summarize_dict(trades)` は空リストに `{"trades": 0}` を返し、非空リストには `trades`/`wins`/`losses`/`win_rate`/`total_pips`/`avg_pips`/`best_pips`/`worst_pips` と `by_exit`/`by_cell_mode`/`by_regime` の内訳を返す。加えて `dispersion` の5キー（`std_pips`/`stderr_pips`/`t_stat`/`ci95_low`/`ci95_high`）を含む。
+- `dispersion(result_pips)` は1トレードあたり損益の標準偏差・標準誤差・t統計量と、平均の95%信頼区間（正規近似、z=1.96）を返す。トレード数が2未満、または分散が 0 の標本では、推定できない項を `None` にする（0 や NaN を返さない）。
+- `summarize_dict` の戻り値は `json.dumps` 可能な素の型だけで構成される（numpy スカラを含まない）。CLI の `--json` がこの dict をそのまま出力するため。
 
 | 保証（要約） | 対応テスト |
 |---|---|
@@ -119,6 +123,9 @@
 | 動的閾値モード（smoke） | `test_run_day_dynamic_thresholds` |
 | 動的閾値がデータ由来であること | `test_run_day_dynamic_thresholds_differ_from_static` |
 | 成績集計（`summarize_dict`） | `test_summarize_dict_empty`, `test_summarize_dict_aggregates` |
+| ばらつきの同梱 | `test_summarize_dict_carries_dispersion` |
+| 推定不能時の `None` | `test_dispersion_is_none_when_there_is_nothing_to_estimate` |
+| JSON 化可能であること | `test_summarize_dict_stays_json_serialisable` |
 
 ### 8. `tests/test_selection.py` — `bt_dynamic.selection`
 
@@ -153,7 +160,8 @@
 - `run_period(bars, dates, config)` は複数日・複数年にまたがるバーとその期間の営業日リストを受け取り、日ごとの `run_day` 結果を時系列順に連結したトレードのリストを返す。データが存在しない日は黙って飛ばし、例外を送出しない。`multi_position` 引数は `run_day` にそのまま渡る。
 - `split_train_test(dates, ratio)` は日付リストを時系列順のまま前後2つに分割する。シャッフル・ランダム抽出は行わない。`ratio` は train 側の割合で、0 または 1 に潰れる分割（両端含む）は `ValueError` を送出する。
 - `cell_breakdown(bars, dates, config)` は、`config.regime_strategy` に載っている（モードが `None` でない）各セルについて「そのセルだけを有効にした config」で個別にバックテストし、セルごとの成績（`summarize_dict` 形式）を `{cell: summary}` で返す。**セル単独の成績の合計は、全セルを同時に有効にした成績と一致しない**（単一ポジションモードではセル同士がポジションを奪い合うため）。この非加算性は仕様である。
-- `param_sweep(bars, dates, config, overrides)` は `Config.override(**kwargs)` で作った各設定を同一期間で評価し、合計 pips の降順に並べた結果を返す。各要素は `{"overrides": ..., "summary": ...}` の形で、与えた上書き内容と成績を持つ。上書き無しの元 config も必ず結果に含まれる。
+- `cell_breakdown(..., cells={cell: mode})` は config が flat にしているセルも評価対象にできる。config に載っているセルの成績は、`cells` を渡しても渡さなくても一致する。
+- `param_sweep(bars, dates, config, overrides)` は `Config.override(**kwargs)` で作った各設定を同一期間で評価し、**t統計量の降順**に並べた結果を返す（合計 pips 順ではない。t統計量が定義できない候補は末尾に置く）。各要素は `{"overrides": ..., "summary": ..., "trades": ...}` の形で、与えた上書き内容・成績・その候補のトレード列を持つ。トレード列は呼び出し側が年別や train/test に切り分けるためのもので、要素数は `summary["trades"]` に一致する。上書き無しの元 config も必ず結果に含まれる。
 - 上記すべては純関数であり、渡された `Config` と `bars` を変更しない。ファイル I/O を行わず、設定を暗黙に読まない。
 
 | 保証（要約） | 対応テスト |
@@ -163,7 +171,9 @@
 | 潰れる ratio の拒否 | `test_split_train_test_rejects_degenerate_ratio`, `test_split_train_test_rejects_ratio_that_empties_small_input` |
 | セル単独評価の非加算性 | `test_cell_breakdown_is_not_additive_with_combined_run` |
 | 対象セルの絞り込み | `test_cell_breakdown_only_covers_active_cells` |
-| パラメータグリッドの並び | `test_param_sweep_includes_base_config_and_sorts_descending` |
+| flat セルの走査 | `test_cell_breakdown_can_score_cells_the_config_leaves_flat` |
+| パラメータグリッドの並び | `test_param_sweep_includes_base_config_and_ranks_by_t_stat`, `test_param_sweep_does_not_rank_by_total_pips` |
+| 候補ごとのトレード列 | `test_param_sweep_carries_trades_for_caller_side_breakdowns` |
 | 非破壊性（Config・DataFrame とも） | `test_functions_do_not_mutate_config_or_bars` |
 
 ## About

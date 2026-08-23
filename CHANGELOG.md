@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- `summarize_dict`: every summary now carries the spread of per-trade P&L — `std_pips`, `stderr_pips`, `t_stat` and the 95% interval on the mean (`ci95_low` / `ci95_high`). A total alone cannot tell an edge from noise. Exposed as `dispersion()` for direct use; `summarize()` prints it too
+- `param_sweep`: ranks by `t_stat` instead of total pips (**behaviour change**), and each result now carries its `trades` so a candidate can be broken down by year or train/test without re-running the sweep
+- `cell_breakdown`: new `cells` argument scores cells the config leaves flat; the default still covers only the configured ones
+- `regime.ALL_CELLS`: the full 3x3 grid, for scanning every cell `classify` can return
+- `__version__` was stuck at 0.1.0 since the first release; it now tracks the package version
+
 ## 0.1.6
 
 - `load_jsonl`: parse `time_utc` per row as ISO8601, so a single file may mix formats (e.g. with and without fractional seconds)
