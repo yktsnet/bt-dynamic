@@ -7,13 +7,13 @@ The market is classified into a 9-cell grid (trend strength x volatility,
 an external JSON config injected at run time; the package ships no strategy.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from bt_dynamic.config import Config, Params
 from bt_dynamic.data import load_jsonl
-from bt_dynamic.engine import debug_day, run_day, summarize, summarize_dict
+from bt_dynamic.engine import debug_day, dispersion, run_day, summarize, summarize_dict
 from bt_dynamic.indicators import DEFAULT_INDICATORS, IndicatorSet, load_indicator_file
-from bt_dynamic.regime import classify
+from bt_dynamic.regime import ALL_CELLS, classify
 
 __all__ = [
     "Config",
@@ -23,8 +23,10 @@ __all__ = [
     "debug_day",
     "summarize",
     "summarize_dict",
+    "dispersion",
     "DEFAULT_INDICATORS",
     "IndicatorSet",
     "load_indicator_file",
     "classify",
+    "ALL_CELLS",
 ]

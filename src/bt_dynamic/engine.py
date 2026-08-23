@@ -387,6 +387,46 @@ def debug_day(
     return records
 
 
+CI95_Z = 1.96
+
+
+def dispersion(result_pips: pd.Series) -> dict:
+    """Spread of per-trade P&L: is the mean distinguishable from zero?
+
+    A total on its own cannot separate an edge from noise — over a few
+    thousand trades a bracket strategy's per-trade standard deviation is
+    typically an order of magnitude larger than its mean — so every summary
+    carries the spread alongside the sum.
+
+    ``ci95_low`` / ``ci95_high`` bound the *per-trade mean*, as a normal
+    approximation (the t correction is negligible at the sample sizes this
+    engine produces and would cost a scipy dependency). Fewer than two
+    trades, or a degenerate zero-variance sample, leaves the fields ``None``
+    rather than reporting a number that has no meaning.
+    """
+    n = len(result_pips)
+    if n < 2:
+        return {"std_pips": None, "stderr_pips": None, "t_stat": None,
+                "ci95_low": None, "ci95_high": None}
+
+    std = float(result_pips.std())
+    # plain floats, not numpy scalars: this dict is json.dumps()-ed by --json
+    stderr = std / (n**0.5)
+    if stderr == 0:
+        return {"std_pips": 0.0, "stderr_pips": 0.0, "t_stat": None,
+                "ci95_low": None, "ci95_high": None}
+
+    mean = float(result_pips.mean())
+    half = CI95_Z * stderr
+    return {
+        "std_pips": round(std, 2),
+        "stderr_pips": round(stderr, 3),
+        "t_stat": round(mean / stderr, 2),
+        "ci95_low": round(mean - half, 3),
+        "ci95_high": round(mean + half, 3),
+    }
+
+
 def summarize_dict(trades: list[dict]) -> dict:
     """Summarize trades as plain data, for ``--json`` output and run comparison."""
     if not trades:
@@ -415,6 +455,7 @@ def summarize_dict(trades: list[dict]) -> dict:
         "avg_pips": round(float(df["result_pips"].mean()), 2),
         "best_pips": round(float(df["result_pips"].max()), 2),
         "worst_pips": round(float(df["result_pips"].min()), 2),
+        **dispersion(df["result_pips"]),
         "by_exit": breakdown("exit"),
         "by_cell_mode": breakdown("cell_mode"),
         "by_regime": breakdown("regime"),
@@ -435,6 +476,15 @@ def summarize(trades: list[dict]) -> pd.DataFrame | None:
     print(f"win rate  : {wins / len(df) * 100:.1f}% ({wins}W {len(df) - wins}L)")
     print(f"total pips: {total:.2f}")
     print(f"avg pips  : {df['result_pips'].mean():.2f}")
+    spread = dispersion(df["result_pips"])
+    if spread["t_stat"] is None:
+        print("std / t   : n/a (too few trades)")
+    else:
+        print(f"std pips  : {spread['std_pips']:.2f}")
+        print(
+            f"avg 95%CI : [{spread['ci95_low']:+.2f}, {spread['ci95_high']:+.2f}]"
+            f"  t={spread['t_stat']:+.2f}"
+        )
     print(f"best      : {df['result_pips'].max():.2f}")
     print(f"worst     : {df['result_pips'].min():.2f}")
     print("\n--- by exit ---")

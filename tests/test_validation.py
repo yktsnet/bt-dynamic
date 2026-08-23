@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from bt_dynamic.config import Config
+from bt_dynamic.regime import ALL_CELLS
 from bt_dynamic.validation import cell_breakdown, param_sweep, run_period, split_train_test
 
 
@@ -126,7 +127,29 @@ def test_cell_breakdown_only_covers_active_cells():
     assert set(breakdown) == {(0, 0)}
 
 
-def test_param_sweep_includes_base_config_and_sorts_descending():
+def test_cell_breakdown_can_score_cells_the_config_leaves_flat():
+    df = _make_mixed_trend_bars(days=6)
+    config = Config.from_dict(
+        {
+            "parameters": {"direction_band": 2.0},
+            "regime_strategy": {"0,0": "follow"},
+        }
+    )
+
+    scanned = cell_breakdown(
+        df, TRADE_DATES, config, cells={cell: "follow" for cell in ALL_CELLS}
+    )
+
+    assert set(scanned) == set(ALL_CELLS)
+    # the configured cell is scored identically either way
+    assert scanned[(0, 0)] == cell_breakdown(df, TRADE_DATES, config)[(0, 0)]
+    # and at least one unconfigured cell actually produced trades to compare
+    assert any(
+        cell != (0, 0) and summary.get("trades") for cell, summary in scanned.items()
+    )
+
+
+def test_param_sweep_includes_base_config_and_ranks_by_t_stat():
     df = _make_mixed_trend_bars(days=6)
     config = _permissive_config()
     overrides = [{"tp_pips": 5.0}, {"tp_pips": 40.0}, {"tp_pips": 1.0}]
@@ -136,8 +159,39 @@ def test_param_sweep_includes_base_config_and_sorts_descending():
     assert len(results) == len(overrides) + 1
     assert any(r["overrides"] == {} for r in results)
 
+    # ranked by t_stat, with candidates too small to have one pushed to the end
+    ranked = [r["summary"].get("t_stat") for r in results]
+    scored = [t for t in ranked if t is not None]
+    assert scored == sorted(scored, reverse=True)
+    assert ranked[: len(scored)] == scored
+
+
+def test_param_sweep_carries_trades_for_caller_side_breakdowns():
+    df = _make_mixed_trend_bars(days=6)
+    config = _permissive_config()
+
+    results = param_sweep(df, TRADE_DATES, config, [{"tp_pips": 5.0}])
+
+    for result in results:
+        assert len(result["trades"]) == result["summary"].get("trades", 0)
+        # enough to slice by period without re-running the sweep
+        assert all("entry_time" in t for t in result["trades"])
+
+
+def test_param_sweep_does_not_rank_by_total_pips():
+    """A sum rewards whichever candidate simply traded the most.
+
+    A tight TP fires far more often than a distant one, so the two rankings
+    come apart; if they ever stopped doing so this test would be vacuous.
+    """
+    df = _make_mixed_trend_bars(days=6)
+    config = _permissive_config()
+    overrides = [{"tp_pips": 2.0}, {"tp_pips": 40.0}, {"sl_pips": 2.0}]
+
+    results = param_sweep(df, TRADE_DATES, config, overrides)
     totals = [r["summary"].get("total_pips", 0.0) for r in results]
-    assert totals == sorted(totals, reverse=True)
+
+    assert totals != sorted(totals, reverse=True)
 
 
 def test_functions_do_not_mutate_config_or_bars():

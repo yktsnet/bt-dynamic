@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 
+# Every cell classify() can return. The config names only the cells a strategy
+# acts on; this is the full grid, for scanning the ones it leaves flat.
+ALL_CELLS: tuple[tuple[int, int], ...] = tuple(
+    (ax1, ax2) for ax1 in range(3) for ax2 in range(3)
+)
+
+
 def classify(
     ax1_val: float,
     ax2_val: float,

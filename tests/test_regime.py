@@ -1,4 +1,4 @@
-from bt_dynamic.regime import classify
+from bt_dynamic.regime import ALL_CELLS, classify
 
 THRESHOLDS = {
     "ax1_weak": 20.0,
@@ -46,3 +46,12 @@ def test_classify_custom_direction_center():
         30.0, 0.02, 0.02, 8.0, **THRESHOLDS, direction_center=0.0
     )
     assert result[2] == "BUY"
+
+
+def test_all_cells_covers_every_class_pair_classify_can_return():
+    assert len(ALL_CELLS) == 9
+    assert len(set(ALL_CELLS)) == 9
+    # the extremes classify() produces are both in the grid
+    assert classify(1.0, 0.001, 0.02, 90.0, **THRESHOLDS)[:2] in ALL_CELLS
+    assert classify(99.0, 0.9, 0.02, 10.0, **THRESHOLDS)[:2] in ALL_CELLS
+    assert all(0 <= ax1 <= 2 and 0 <= ax2 <= 2 for ax1, ax2 in ALL_CELLS)
