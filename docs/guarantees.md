@@ -161,7 +161,8 @@
 - `split_train_test(dates, ratio)` は日付リストを時系列順のまま前後2つに分割する。シャッフル・ランダム抽出は行わない。`ratio` は train 側の割合で、0 または 1 に潰れる分割（両端含む）は `ValueError` を送出する。
 - `cell_breakdown(bars, dates, config)` は、`config.regime_strategy` に載っている（モードが `None` でない）各セルについて「そのセルだけを有効にした config」で個別にバックテストし、セルごとの成績（`summarize_dict` 形式）を `{cell: summary}` で返す。**セル単独の成績の合計は、全セルを同時に有効にした成績と一致しない**（単一ポジションモードではセル同士がポジションを奪い合うため）。この非加算性は仕様である。
 - `cell_breakdown(..., cells={cell: mode})` は config が flat にしているセルも評価対象にできる。config に載っているセルの成績は、`cells` を渡しても渡さなくても一致する。
-- `param_sweep(bars, dates, config, overrides)` は `Config.override(**kwargs)` で作った各設定を同一期間で評価し、**t統計量の降順**に並べた結果を返す（合計 pips 順ではない。t統計量が定義できない候補は末尾に置く）。各要素は `{"overrides": ..., "summary": ..., "trades": ...}` の形で、与えた上書き内容・成績・その候補のトレード列を持つ。トレード列は呼び出し側が年別や train/test に切り分けるためのもので、要素数は `summary["trades"]` に一致する。上書き無しの元 config も必ず結果に含まれる。
+- `param_sweep(bars, dates, config, overrides)` は `Config.override(**kwargs)` で作った各設定を同一期間で評価し、**t統計量の降順**に並べた結果を返す（合計 pips 順ではない。t統計量が定義できない候補は末尾に置く）。各要素は `{"overrides": ..., "summary": ..., "trades": ..., "diff_vs_base": ...}` の形で、与えた上書き内容・成績・その候補のトレード列・上書き無しの基準設定に対する `paired_diff` 相当の日次差分統計を持つ。トレード列は呼び出し側が年別や train/test に切り分けるためのもので、要素数は `summary["trades"]` に一致する。`diff_vs_base` はその場で保有済みの `trades` から計算し、バックテストをやり直さない。上書き無しの元 config も必ず結果に含まれ、その `diff_vs_base` はすべて 0 になる。
+- `paired_diff(bars, dates, baseline, candidate)` は同じ `dates` 上で2つの config を評価し、日ごとに対応させた損益差（candidate − baseline）を `{"days", "mean_diff_pips", "std_pips", "stderr_pips", "t_stat", "ci95_low", "ci95_high"}` として返す（後者5キーは `engine.dispersion` を日次差分の Series にそのまま適用したもの）。対応の索引は与えた `dates` そのもので、片方（または両方）がトレードしなかった日も 0.0 として数える。同一 config 同士を渡すと `mean_diff_pips` は 0 になり、分散ゼロのため `t_stat`/`ci95_low`/`ci95_high` は `None` になる。この統計量は、両者を独立に評価した `std`/`stderr` から合成した値とは一致しない（相関ぶん分散が小さくなるのが本関数の存在理由）。
 - 上記すべては純関数であり、渡された `Config` と `bars` を変更しない。ファイル I/O を行わず、設定を暗黙に読まない。
 
 | 保証（要約） | 対応テスト |
@@ -174,6 +175,10 @@
 | flat セルの走査 | `test_cell_breakdown_can_score_cells_the_config_leaves_flat` |
 | パラメータグリッドの並び | `test_param_sweep_includes_base_config_and_ranks_by_t_stat`, `test_param_sweep_does_not_rank_by_total_pips` |
 | 候補ごとのトレード列 | `test_param_sweep_carries_trades_for_caller_side_breakdowns` |
+| 候補ごとの基準設定との差分 | `test_param_sweep_carries_diff_vs_base_computed_from_existing_trades`, `test_param_sweep_computes_diff_without_rerunning_the_backtest` |
+| 日次対応差分の基本形 | `test_paired_diff_returns_expected_keys_and_day_count`, `test_paired_diff_is_zero_for_identical_configs` |
+| 日次対応・未トレード日の0埋め | `test_paired_diff_pairs_by_day_and_fills_untraded_days_with_zero` |
+| 独立評価との不一致 | `test_paired_diff_does_not_match_naive_independent_combination` |
 | 非破壊性（Config・DataFrame とも） | `test_functions_do_not_mutate_config_or_bars` |
 
 ## About

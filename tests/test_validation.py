@@ -5,8 +5,15 @@ import pandas as pd
 import pytest
 
 from bt_dynamic.config import Config
+from bt_dynamic.engine import dispersion
 from bt_dynamic.regime import ALL_CELLS
-from bt_dynamic.validation import cell_breakdown, param_sweep, run_period, split_train_test
+from bt_dynamic.validation import (
+    cell_breakdown,
+    paired_diff,
+    param_sweep,
+    run_period,
+    split_train_test,
+)
 
 
 def _make_mixed_trend_bars(days: int = 6, bars_per_day: int = 120):
@@ -194,6 +201,144 @@ def test_param_sweep_does_not_rank_by_total_pips():
     assert totals != sorted(totals, reverse=True)
 
 
+PAIRED_DIFF_KEYS = {
+    "days", "mean_diff_pips", "std_pips", "stderr_pips", "t_stat", "ci95_low", "ci95_high",
+}
+
+
+def test_paired_diff_returns_expected_keys_and_day_count():
+    df = _make_mixed_trend_bars(days=6)
+    baseline = _permissive_config()
+    candidate = baseline.override(tp_pips=5.0)
+
+    result = paired_diff(df, TRADE_DATES, baseline, candidate)
+
+    assert set(result) == PAIRED_DIFF_KEYS
+    assert result["days"] == len(TRADE_DATES)
+
+
+def test_paired_diff_is_zero_for_identical_configs():
+    df = _make_mixed_trend_bars(days=6)
+    config = _permissive_config()
+
+    result = paired_diff(df, TRADE_DATES, config, config)
+
+    assert result["mean_diff_pips"] == 0.0
+    assert result["std_pips"] == 0.0
+    assert result["stderr_pips"] == 0.0
+    assert result["t_stat"] is None
+    assert result["ci95_low"] is None
+    assert result["ci95_high"] is None
+
+
+def _manual_daily_diff(df, baseline, candidate) -> list[float]:
+    """Reference implementation: per-day (candidate - baseline) pips, 0.0 when a
+    side takes no trade that day. Computed independently of ``validation.py``
+    so it can serve as a check on the pairing/zero-fill contract."""
+    diffs = []
+    for d in TRADE_DATES:
+        base_trades = run_period(df, [d], baseline)
+        cand_trades = run_period(df, [d], candidate)
+        base_sum = sum(t["result_pips"] for t in base_trades)
+        cand_sum = sum(t["result_pips"] for t in cand_trades)
+        diffs.append(cand_sum - base_sum)
+    return diffs
+
+
+def test_paired_diff_pairs_by_day_and_fills_untraded_days_with_zero():
+    df = _make_mixed_trend_bars(days=6)
+    # only one cell active: some days plausibly take zero trades for this side
+    sparse = Config.from_dict(
+        {
+            "parameters": {"direction_band": 2.0},
+            "regime_strategy": {"0,0": "follow"},
+        }
+    )
+    permissive = _permissive_config()
+
+    sparse_daily_counts = [
+        len(run_period(df, [d], sparse)) for d in TRADE_DATES
+    ]
+    assert any(count == 0 for count in sparse_daily_counts), (
+        "test needs at least one day where the sparse config stays flat"
+    )
+    assert all(
+        len(run_period(df, [d], permissive)) > 0 for d in TRADE_DATES
+    ), "test needs the permissive config to trade every day, to exercise the one-sided fill"
+
+    expected_diffs = _manual_daily_diff(df, sparse, permissive)
+    result = paired_diff(df, TRADE_DATES, sparse, permissive)
+
+    assert result["mean_diff_pips"] == pytest.approx(
+        sum(expected_diffs) / len(expected_diffs), abs=1e-3
+    )
+
+
+def test_paired_diff_does_not_match_naive_independent_combination():
+    """The paired stderr must differ from one synthesized by treating the two
+    configs' daily series as independent (i.e. summing variances) — matching
+    independently would mean the pairing bought nothing."""
+    df = _make_mixed_trend_bars(days=6)
+    baseline = _permissive_config()
+    candidate = baseline.override(tp_pips=5.0)
+
+    baseline_daily = pd.Series(
+        [sum(t["result_pips"] for t in run_period(df, [d], baseline)) for d in TRADE_DATES]
+    )
+    candidate_daily = pd.Series(
+        [sum(t["result_pips"] for t in run_period(df, [d], candidate)) for d in TRADE_DATES]
+    )
+    base_spread = dispersion(baseline_daily)
+    cand_spread = dispersion(candidate_daily)
+    naive_stderr = (base_spread["stderr_pips"] ** 2 + cand_spread["stderr_pips"] ** 2) ** 0.5
+
+    result = paired_diff(df, TRADE_DATES, baseline, candidate)
+
+    assert result["stderr_pips"] != pytest.approx(naive_stderr, rel=1e-6)
+
+
+def test_param_sweep_carries_diff_vs_base_computed_from_existing_trades():
+    df = _make_mixed_trend_bars(days=6)
+    config = _permissive_config()
+    overrides = [{"tp_pips": 5.0}, {"tp_pips": 40.0}]
+
+    results = param_sweep(df, TRADE_DATES, config, overrides)
+
+    for result in results:
+        assert set(result["diff_vs_base"]) == PAIRED_DIFF_KEYS
+
+    base_result = next(r for r in results if r["overrides"] == {})
+    assert base_result["diff_vs_base"]["mean_diff_pips"] == 0.0
+    assert base_result["diff_vs_base"]["t_stat"] is None
+
+    tp5_result = next(r for r in results if r["overrides"] == {"tp_pips": 5.0})
+    expected = paired_diff(df, TRADE_DATES, config, config.override(tp_pips=5.0))
+    assert tp5_result["diff_vs_base"] == expected
+
+
+def test_param_sweep_computes_diff_without_rerunning_the_backtest(monkeypatch):
+    import bt_dynamic.validation as validation_module
+
+    df = _make_mixed_trend_bars(days=6)
+    config = _permissive_config()
+    overrides = [{"tp_pips": 5.0}, {"tp_pips": 40.0}]
+
+    calls = []
+    original_run_period = validation_module.run_period
+
+    def counting_run_period(*args, **kwargs):
+        calls.append(1)
+        return original_run_period(*args, **kwargs)
+
+    monkeypatch.setattr(validation_module, "run_period", counting_run_period)
+
+    param_sweep(df, TRADE_DATES, config, overrides)
+
+    # one run_period call per candidate (base + overrides); computing
+    # diff_vs_base from the trades already collected must not add more
+    assert len(calls) == len(overrides) + 1
+
+
 def test_functions_do_not_mutate_config_or_bars():
     df = _make_mixed_trend_bars(days=6)
     config = _permissive_config()
@@ -203,6 +348,7 @@ def test_functions_do_not_mutate_config_or_bars():
     run_period(df, TRADE_DATES, config)
     cell_breakdown(df, TRADE_DATES, config)
     param_sweep(df, TRADE_DATES, config, [{"tp_pips": 5.0}])
+    paired_diff(df, TRADE_DATES, config, config.override(tp_pips=5.0))
     split_train_test(TRADE_DATES, ratio=0.5)
 
     assert config.regime_strategy == strategy_before
