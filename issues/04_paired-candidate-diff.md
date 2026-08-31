@@ -2,7 +2,7 @@
 id: 04
 branch-slug: paired-candidate-diff
 github_issue:
-status: draft
+status: open
 type: feat
 対象: src/bt_dynamic/validation.py, tests/test_validation.py, docs/guarantees.md, CHANGELOG.md
 内容: 2つの設定を同一期間で走らせ、日ごとに対応させた損益差の平均と信頼区間を返す関数を足す。`param_sweep` の各候補にも基準設定との差を持たせる。
