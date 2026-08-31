@@ -2,7 +2,7 @@
 id: 03
 branch-slug: atr-scaled-bracket
 github_issue:
-status: draft
+status: open
 type: feat
 対象: src/bt_dynamic/config.py, src/bt_dynamic/engine.py, tests/test_config.py, tests/test_engine.py, docs/guarantees.md, CHANGELOG.md
 内容: ブラケットの幅を固定 pips だけでなく、エントリー時点の ATR の倍数でも指定できるようにする。既定は現行どおり固定 pips。

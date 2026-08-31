@@ -1,8 +1,62 @@
+## PR記録: feat: 候補間の差を日次で対応させて評価する
+issue: 04 (04_paired-candidate-diff.md)
+PR: https://github.com/yktsnet/bt-dynamic/pull/12
+Merged: f8c3d1c138afbc81a695f87a7b9c9ac579e95c80
+
+## 変更内容
+2つの設定を同一期間で走らせ、日ごとに対応させた損益差の平均と信頼区間を返す
+`paired_diff(bars, dates, baseline, candidate)` を `validation.py` に追加した。
+統計量そのものは `engine.dispersion` を日次差分の Series にそのまま適用して求め、
+実装を二重に持たない。`param_sweep` の各候補にも `diff_vs_base` を持たせ、基準
+設定（上書き無しの候補）に対する同じ日次差分統計を、既に持っている `trades` から
+計算する（バックテストの再実行はしない）。
+
+対応の索引は与えられた `dates` そのもので、片方（または両方）がトレードしなかった
+日は 0.0 として数える。トレードのあった日だけを拾うと対応が崩れて偏るため。
+
+## 保証
+- 2つの設定を同一の日付集合で評価し、日ごとに対応させた損益差の平均・標準誤差・
+  t統計量・95%信頼区間を返す
+  → `test_paired_diff_returns_expected_keys_and_day_count`
+- 対応の索引は与えられた日付集合そのものであり、片方（または両方）がトレードしな
+  かった日は 0.0 として数える
+  → `test_paired_diff_pairs_by_day_and_fills_untraded_days_with_zero`
+- 差の統計量は、両者を独立に評価した統計量から計算した値とは一致しない
+  → `test_paired_diff_does_not_match_naive_independent_combination`
+- `param_sweep` の各要素が、基準設定に対する差の統計量を持つ。基準設定自身の差は
+  ゼロになる
+  → `test_param_sweep_carries_diff_vs_base_computed_from_existing_trades`
+- 差の計算はその場で済ませ、バックテストを走らせ直さない
+  → `test_param_sweep_computes_diff_without_rerunning_the_backtest`（`run_period`
+  呼び出し回数を監視し、候補数と一致することを確認）
+- 維持する保証（`param_sweep` の t統計量降順・`overrides`/`summary`/`trades` の
+  保持、`run_period`/`split_train_test` の既存挙動、検証層の純関数性）は既存
+  テストのままカバーされ、退行なし
+- `docs/guarantees.md` §10 を更新: `param_sweep` の戻り値に `diff_vs_base` を
+  追記し、新規 `paired_diff` の保証項目とテスト対応表を追加
+
+## 静的確認結果
+- `git diff --name-only --cached` は issue の対象と完全一致:
+  `CHANGELOG.md`, `docs/guarantees.md`, `src/bt_dynamic/validation.py`,
+  `tests/test_validation.py`
+- `paired_diff`/`_paired_diff_stats`/`_daily_pips` の呼び出し元（`param_sweep`
+  内の追加ループ、テスト側の import）を確認。`engine.dispersion` の import 追加
+  も含めて caller/import の整合性を確認した
+- `context/conventions.md` に沿って `from __future__ import annotations` は
+  既存のまま、型ヒントは PEP604 スタイル、純関数（引数外の状態に依存しない）
+- `context/structure.md` の一方向依存を維持: 新関数は `validation.py` に置き、
+  `engine`/`config` のみを import する
+
+## 検証手順
+`nix-shell -p "python3.withPackages(ps: with ps; [pandas numpy pytest])" --run "PYTHONPATH=src pytest tests -q"` → 91 passed
+
+
+
 ## feat: 候補間の差を日次で対応させて評価する
 id: 04
 branch-slug: paired-candidate-diff
-github_issue:
-status: open
+github_issue: 13
+status: close
 type: feat
 対象: src/bt_dynamic/validation.py, tests/test_validation.py, docs/guarantees.md, CHANGELOG.md
 内容: 2つの設定を同一期間で走らせ、日ごとに対応させた損益差の平均と信頼区間を返す関数を足す。`param_sweep` の各候補にも基準設定との差を持たせる。
