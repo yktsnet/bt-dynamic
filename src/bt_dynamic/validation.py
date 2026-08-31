@@ -19,7 +19,7 @@ from datetime import date
 import pandas as pd
 
 from bt_dynamic.config import Cell, Config
-from bt_dynamic.engine import run_day, summarize_dict
+from bt_dynamic.engine import dispersion, run_day, summarize_dict
 from bt_dynamic.indicators import DEFAULT_INDICATORS, IndicatorSet
 
 
@@ -100,6 +100,85 @@ def cell_breakdown(
     return results
 
 
+def _daily_pips(trades: list[dict], dates: list[date]) -> pd.Series:
+    """Per-day sum of ``result_pips``, reindexed to ``dates`` with 0.0 for days without a trade.
+
+    Grouped by ``entry_time``'s date, not ``exit_time``: a day's trading
+    window sits entirely inside that calendar day (``engine.run_day`` only
+    opens positions inside the target day and force-closes anything still
+    open at EOD), so the entry date already identifies the day even for a
+    force-closed position.
+    """
+    daily = pd.Series(0.0, index=pd.Index(dates))
+    if not trades:
+        return daily
+    df = pd.DataFrame(trades)
+    entry_dates = pd.DatetimeIndex(df["entry_time"]).date
+    by_day = df.groupby(entry_dates)["result_pips"].sum()
+    return by_day.reindex(dates, fill_value=0.0)
+
+
+def _paired_diff_stats(
+    baseline_trades: list[dict], candidate_trades: list[dict], dates: list[date]
+) -> dict:
+    """Day-paired diff (candidate minus baseline) from already-run trades.
+
+    The index for pairing is ``dates`` itself, not "days either side
+    traded": a day where only one side entered still counts, as 0.0 for
+    the side that stayed flat, otherwise conditioning on "both sides
+    traded" would bias the estimate. The std/stderr/t/CI cluster is
+    ``engine.dispersion`` applied to the daily diff series, so it inherits
+    its rules verbatim (fewer than two days, or a zero-variance diff,
+    leaves those fields ``None``) instead of re-implementing them.
+    """
+    diff = _daily_pips(candidate_trades, dates) - _daily_pips(baseline_trades, dates)
+    return {
+        "days": len(dates),
+        "mean_diff_pips": round(float(diff.mean()), 3),
+        **dispersion(diff),
+    }
+
+
+def paired_diff(
+    bars: pd.DataFrame,
+    dates: list[date],
+    baseline: Config,
+    candidate: Config,
+    indicators: IndicatorSet = DEFAULT_INDICATORS,
+    multi_position: bool = False,
+) -> dict:
+    """Run two configs over the same dates and score their day-paired diff.
+
+    Evaluating ``baseline`` and ``candidate`` independently (as
+    ``param_sweep`` does for its per-candidate ``summary``) throws away the
+    fact that both runs sit on the same days and share the same market
+    noise. Pairing by day and looking at the diff directly cancels that
+    shared noise, so the resulting interval is narrower than one computed
+    from the two independent summaries — it will not match a value derived
+    from their independent ``std``/``stderr`` (that would assume
+    uncorrelated runs). This is the whole reason the function exists rather
+    than just subtracting two ``summarize_dict`` totals.
+
+    Pairing is by day, not by trade: a config change shifts exit times and,
+    in single-position mode, which later entries are even reachable, so the
+    two sides' trades don't line up 1:1. Days are the only index both runs
+    share.
+
+    Returns ``{"days", "mean_diff_pips", "std_pips", "stderr_pips",
+    "t_stat", "ci95_low", "ci95_high"}`` — the last five straight from
+    ``engine.dispersion``. Equal configs make every day's diff 0.0, so
+    ``mean_diff_pips`` is 0.0 and the zero-variance rule leaves the rest
+    ``None``.
+    """
+    baseline_trades = run_period(
+        bars, dates, baseline, indicators=indicators, multi_position=multi_position
+    )
+    candidate_trades = run_period(
+        bars, dates, candidate, indicators=indicators, multi_position=multi_position
+    )
+    return _paired_diff_stats(baseline_trades, candidate_trades, dates)
+
+
 def param_sweep(
     bars: pd.DataFrame,
     dates: list[date],
@@ -120,7 +199,11 @@ def param_sweep(
     largest sum is often just the one that took the most trades, and this
     module exists to stop that number from deciding anything. Each result
     also carries its ``trades``, so the caller can break a candidate down by
-    year or by train/test without re-running it.
+    year or by train/test without re-running it, plus ``diff_vs_base``: the
+    day-paired diff (see :func:`paired_diff`) against the empty-override
+    candidate, computed from the ``trades`` already collected here rather
+    than re-running the backtest. The base candidate's own ``diff_vs_base``
+    is therefore all zeros.
     """
     candidates = [{}, *overrides]
     results = []
@@ -136,6 +219,11 @@ def param_sweep(
         results.append(
             {"overrides": override, "summary": summarize_dict(trades), "trades": trades}
         )
+
+    base_trades = results[0]["trades"]  # candidates[0] is always the empty override
+    for result in results:
+        result["diff_vs_base"] = _paired_diff_stats(base_trades, result["trades"], dates)
+
     results.sort(key=_rank_key, reverse=True)
     return results
 
