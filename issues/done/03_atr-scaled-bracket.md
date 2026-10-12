@@ -2,7 +2,7 @@
 id: 03
 branch-slug: atr-scaled-bracket
 github_issue:
-status: open
+status: close
 type: feat
 対象: src/bt_dynamic/config.py, src/bt_dynamic/engine.py, tests/test_config.py, tests/test_engine.py, docs/guarantees.md, CHANGELOG.md
 内容: ブラケットの幅を固定 pips だけでなく、エントリー時点の ATR の倍数でも指定できるようにする。既定は現行どおり固定 pips。
@@ -75,3 +75,10 @@ TP が SL の5倍遠い非対称ブラケットは、値動きがどちらに大
 
 - 既定値の変更。既定は固定 pips のまま
 - 倍率の推奨値の提示。どの倍率を使うかは利用者側（priv-bt-dynamic の実験台帳）の責務
+
+### 見送り
+
+実装せずに閉じる。priv-bt-dynamic の実験001で、TP/SL の比を端から端まで動かしても成績の変化は
+方向シグナルの振れより1桁以上小さく、ブラケットの形はこのフレームの主要な変数ではないと分かった。
+高ボラ列が負になる件は、実験002で「相対ボラと絶対ボラの別の軸」と整理され、ブラケット幅ではなく
+ax2 の側で検証する。必要になったら改めて立てる。
